@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinelforge"
+version = "0.1.0"
+description = "A deterministic Linux authentication monitoring and detection lab"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{name = "SentinelForge contributors"}]
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.scripts]
+sentinelforge = "sentinelforge.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["sentinelforge*"]

@@ -1,0 +1,18 @@
+# Reference configuration. The offline Phase 1 engine uses RuleConfig in Python.
+SSH_BRUTE_FORCE:
+  enabled: true
+  threshold: 5
+  window_seconds: 120
+  severity: high
+REPEATED_AUTH_FAILURE:
+  enabled: true
+  threshold: 3
+  window_seconds: 120
+  severity: medium
+SUCCESS_AFTER_FAILURES:
+  enabled: true
+  window_seconds: 300
+  severity: medium
+SUSPICIOUS_SUDO_ACTIVITY:
+  enabled: true
+  severity: low

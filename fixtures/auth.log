@@ -1,0 +1,8 @@
+2025-01-15T12:00:00Z lab-host sshd[1001]: Failed password for testuser from 192.0.2.10 port 50101 ssh2
+2025-01-15T12:00:10Z lab-host sshd[1002]: Failed password for testuser from 192.0.2.10 port 50102 ssh2
+2025-01-15T12:00:20Z lab-host sshd[1003]: Invalid user admin from 192.0.2.10 port 50103
+2025-01-15T12:00:30Z lab-host sshd[1004]: Failed password for testuser from 192.0.2.10 port 50104 ssh2
+2025-01-15T12:00:40Z lab-host sshd[1005]: Failed password for testuser from 192.0.2.10 port 50105 ssh2
+2025-01-15T12:00:50Z lab-host sshd[1006]: Failed password for testuser from 192.0.2.10 port 50106 ssh2
+2025-01-15T12:01:00Z lab-host sshd[1007]: Accepted password for testuser from 192.0.2.10 port 50107 ssh2
+2025-01-15T12:02:00Z lab-host sudo[2001]: user=testuser command=/usr/bin/systemctl status ssh
