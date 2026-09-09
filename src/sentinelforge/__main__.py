@@ -7,7 +7,7 @@ import json
 from typing import Sequence
 
 from .detection.engine import DetectionEngine
-from .parsers.linux_auth import parse_file
+from .ingestion.pipeline import ingest_file
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -18,7 +18,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("path", help="path to a documented auth fixture")
     arguments = parser.parse_args(argv)
-    events, diagnostics = parse_file(arguments.path)
+    ingestion_result = ingest_file(arguments.path)
+    events = ingestion_result.events
+    diagnostics = ingestion_result.diagnostics
     if arguments.command == "parse":
         output = {"events": [event.to_dict() for event in events],
                   "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}

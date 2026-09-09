@@ -6,7 +6,12 @@ It is **not** an enterprise SIEM, production SOC platform, or autonomous securit
 
 ## Architecture
 
-`Linux auth fixture → parser → normalized event → detection engine → alert`
+`Local source reader → ingestion pipeline → Linux auth parser → normalized event → detection engine → alert`
+
+Phase 2 adds a small ingestion boundary. The reader handles explicit local file
+input, while the pipeline passes lines to the existing source-specific parser and
+returns normalized events plus non-fatal diagnostics. It does not add new log
+formats or duplicate parser logic.
 
 The normalized `SecurityEvent` includes a timezone-aware UTC timestamp, source, event type, optional username/source IP/hostname/process, message, and the untouched raw line. Missing source data remains `None`.
 
@@ -36,7 +41,7 @@ python -m sentinelforge parse fixtures/auth.log
 python -m sentinelforge detect fixtures/auth.log
 ```
 
-The CLI reads only the path explicitly supplied by the user and emits JSON. It never executes log content or opens live system logs. An installed package also provides the `sentinelforge` command.
+The CLI reads only the path explicitly supplied by the user and emits JSON. It uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
 
 ## Testing
 
