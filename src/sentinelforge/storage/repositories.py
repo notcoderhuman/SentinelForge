@@ -74,6 +74,26 @@ class AnalysisRepository:
             for investigation in investigations:
                 self.save_investigation(investigation)
 
+    def list_payloads(self, resource: str, severity: Optional[str] = None) -> list[Dict[str, Any]]:
+        table = {"runs": "runs", "alerts": "alerts", "incidents": "incidents", "investigations": "investigations"}.get(resource)
+        if table is None:
+            raise ValueError("unsupported resource")
+        query = f"SELECT payload FROM {table}"
+        params: tuple[Any, ...] = ()
+        if severity is not None and resource in {"alerts", "incidents"}:
+            query += " WHERE json_extract(payload, '$.severity') = ?"
+            params = (severity,)
+        query += " ORDER BY rowid"
+        return [json.loads(row[0]) for row in self.db.connection.execute(query, params).fetchall()]
+
+    def get_payload(self, resource: str, entity_id: str) -> Optional[Dict[str, Any]]:
+        columns = {"runs": ("runs", "run_id"), "alerts": ("alerts", "alert_id"), "incidents": ("incidents", "incident_id"), "investigations": ("investigations", "investigation_id")}
+        table, column = columns.get(resource, (None, None))
+        if table is None:
+            raise ValueError("unsupported resource")
+        row = self.db.connection.execute(f"SELECT payload FROM {table} WHERE {column}=?", (entity_id,)).fetchone()
+        return None if row is None else json.loads(row[0])
+
     def list_alerts_for_run(self, run_id: str) -> list[Alert]:
         rows = self.db.connection.execute("SELECT payload FROM alerts WHERE run_id=? ORDER BY timestamp, alert_id", (run_id,)).fetchall()
         return [self._alert_from_payload(json.loads(row[0])) for row in rows]

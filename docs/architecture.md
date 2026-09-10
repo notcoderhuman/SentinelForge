@@ -25,6 +25,7 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 17. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
 18. The `analyze` command orchestrates these existing components and passes their results to the reporting layer.
 19. Optional local SQLite persistence stores validated analysis runs and derived alerts, incidents, investigations, evidence, and notes behind a repository boundary.
+20. The local HTTP API exposes transport-only routes over the same application orchestration and repository boundary; it does not duplicate security logic.
 
 ## Persistence boundary
 
@@ -34,6 +35,31 @@ initialization, foreign-key enforcement, schema versioning, and transactions;
 correlation, risk, incident, or investigation logic. Persistence is idempotent by
 stable entity IDs and does not perform cross-run correlation. The database path is
 always explicitly supplied by `--database`.
+
+## Local HTTP API boundary
+
+Phase 14 adds a standard-library `http.server` interface in `sentinelforge.api`.
+`ApiOperations` dispatches validated requests to application functions, while
+handlers only perform HTTP transport and JSON encoding. The `serve` command binds
+to `127.0.0.1` by default; host and port are explicit options. Endpoints are:
+
+- `GET /health`
+- `GET /runs?limit=20`
+- `GET /alerts?severity=high`
+- `GET /incidents?severity=high`
+- `GET /investigations`
+- `GET /alerts/{alert_id}`
+- `GET /incidents/{incident_id}`
+- `GET /investigations/{investigation_id}`
+- `POST /analyze`
+
+`POST /analyze` accepts `path`, `source`, and optional `severity`, `incident_id`,
+and `database`, returning the same structured report as the existing reporting
+layer. Read endpoints use `AnalysisRepository`; no arbitrary SQL, filesystem read,
+configuration mutation, or note mutation endpoint exists. Request bodies are
+bounded and validated, paths remain local to the working directory, errors are
+concise JSON, and broad CORS is intentionally absent. This is a local
+development/analyst interface, not an authenticated production service.
 
 ## Analyst reporting boundary
 

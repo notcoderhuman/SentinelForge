@@ -30,6 +30,10 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--database", help="local SQLite database path")
     history_parser = subparsers.add_parser("history")
     history_parser.add_argument("--database", required=True, help="local SQLite database path")
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8765)
+    serve_parser.add_argument("--database")
     return parser
 
 
@@ -70,6 +74,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .storage import AnalysisRepository, Database
         with Database(arguments.database) as db:
             print(json.dumps(AnalysisRepository(db).list_runs(), indent=2, sort_keys=True))
+        return 0
+    if arguments.command == "serve":
+        if not 1 <= arguments.port <= 65535:
+            raise SystemExit("port must be between 1 and 65535")
+        from .api import serve
+        serve(arguments.host, arguments.port, arguments.database)
         return 0
     output = _run_existing_command(arguments)
     print(json.dumps(output, indent=2, sort_keys=True))
