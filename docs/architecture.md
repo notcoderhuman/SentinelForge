@@ -13,7 +13,7 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 5. `extract_observables` conservatively extracts supported IPv4, IPv6, domain, URL, and username values from actual event fields and selected message content.
 6. `match_context` performs exact matching against explicitly supplied local context; unknown values remain unknown.
 7. The pipeline returns events together with non-fatal parser diagnostics.
-8. `DetectionEngine` sorts events and evaluates configurable, deterministic rules.
+8. `DetectionEngine` sorts events and evaluates configurable, deterministic rules, including bounded source/account relationship detections supported by the normalized telemetry.
 9. An `Alert` is one detection result. It contains a stable ID, severity, title, description, evidence, and derived observables.
 10. Explicit ATT&CK mappings are looked up from detection rule IDs; no runtime inference or network download is used.
 11. The rule registry provides validated metadata in deterministic rule-ID order, while detection functions remain explicit Python logic.

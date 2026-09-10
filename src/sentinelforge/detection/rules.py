@@ -12,4 +12,8 @@ class RuleConfig:
     repeated_failure_threshold: int = 3
     repeated_failure_window_seconds: int = 120
     success_after_failure_window_seconds: int = 300
+    source_targeting_accounts_threshold: int = 3
+    source_targeting_accounts_window_seconds: int = 120
+    account_targeted_by_sources_threshold: int = 3
+    account_targeted_by_sources_window_seconds: int = 120
     sudo_enabled: bool = True

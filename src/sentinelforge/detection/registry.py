@@ -40,4 +40,10 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
     RuleDefinition("SUSPICIOUS_SUDO_ACTIVITY", "Observed sudo activity",
                    "A supported sudo command was recorded.", "low", 1, True,
                    ("sudo_activity event containing a command",)),
+    RuleDefinition("SOURCE_TARGETS_MULTIPLE_ACCOUNTS", "One source targets multiple accounts",
+                   "Authentication failures from one source IP target multiple usernames.", "medium", 120, True,
+                   ("three authentication_failure events for distinct usernames from one source IP",)),
+    RuleDefinition("ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES", "One account targeted by multiple sources",
+                   "Authentication failures for one username originate from multiple source IPs.", "medium", 120, True,
+                   ("three authentication_failure events from distinct source IPs for one username",)),
 ))

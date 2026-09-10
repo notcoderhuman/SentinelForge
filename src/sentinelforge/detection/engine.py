@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Dict, List, Sequence
+from typing import Callable, Dict, List, Sequence
 
 from ..alerts import Alert, create_alert
 from ..events import SecurityEvent
@@ -27,6 +27,8 @@ class DetectionEngine:
         alerts.extend(self._repeated_failures(ordered_events))
         alerts.extend(self._success_after_failures(ordered_events))
         alerts.extend(self._sudo_activity(ordered_events))
+        alerts.extend(self._source_targets_multiple_accounts(ordered_events))
+        alerts.extend(self._account_targeted_by_multiple_sources(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
@@ -91,3 +93,49 @@ class DetectionEngine:
                              "Sudo activity observed for privileged command execution.",
                              "A sudo command was recorded. The command is not automatically considered malicious.", [event])
                 for event in events if event.event_type == "sudo_activity"]
+
+    def _source_targets_multiple_accounts(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        failures_by_ip: Dict[str, List[SecurityEvent]] = {}
+        for event in self._failures(events):
+            if event.source_ip and event.username:
+                failures_by_ip.setdefault(event.source_ip, []).append(event)
+        return self._distinct_entity_alerts(
+            failures_by_ip,
+            self.config.source_targeting_accounts_threshold,
+            self.config.source_targeting_accounts_window_seconds,
+            "SOURCE_TARGETS_MULTIPLE_ACCOUNTS",
+            "One source IP targeted multiple accounts.",
+            "Observed authentication failures for multiple accounts from source IP {entity} within the configured window.",
+            lambda event: event.username,
+        )
+
+    def _account_targeted_by_multiple_sources(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        failures_by_user: Dict[str, List[SecurityEvent]] = {}
+        for event in self._failures(events):
+            if event.username and event.source_ip:
+                failures_by_user.setdefault(event.username, []).append(event)
+        return self._distinct_entity_alerts(
+            failures_by_user,
+            self.config.account_targeted_by_sources_threshold,
+            self.config.account_targeted_by_sources_window_seconds,
+            "ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES",
+            "One account was targeted by multiple sources.",
+            "Observed authentication failures for account {entity} from multiple source IPs within the configured window.",
+            lambda event: event.source_ip,
+        )
+
+    def _distinct_entity_alerts(self, grouped_events: Dict[str, List[SecurityEvent]], threshold: int,
+                                window_seconds: int, rule_id: str, title: str, description: str,
+                                entity_key: Callable[[SecurityEvent], str | None]) -> List[Alert]:
+        alerts: List[Alert] = []
+        window = timedelta(seconds=window_seconds)
+        for entity, grouped in sorted(grouped_events.items()):
+            for end_index in range(threshold - 1, len(grouped)):
+                matching = grouped[end_index - threshold + 1:end_index + 1]
+                if (matching[-1].timestamp - matching[0].timestamp <= window
+                        and len({entity_key(event) for event in matching}) >= threshold):
+                    alerts.append(create_alert(
+                        rule_id, self.registry.get(rule_id).severity, title,
+                        description.format(entity=entity), matching))
+                    break
+        return alerts

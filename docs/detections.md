@@ -32,6 +32,34 @@ and `rules/auth_rules.yaml` remains reference metadata only.
 - **Limitations:** the command is not automatically malicious. No command is executed by SentinelForge.
 - **ATT&CK:** No mapping is assigned; observed sudo activity alone is insufficient for a defensible technique mapping.
 
+## Phase 10 relationship detections
+
+These new rules use only the parser's existing `authentication_failure`, `username`,
+and `source_ip` fields. The supplied `fixtures/phase10-source-account.log` is synthetic
+demonstration data.
+
+### SOURCE_TARGETS_MULTIPLE_ACCOUNTS
+
+- **Purpose:** identify one source IP targeting multiple accounts.
+- **Severity:** `medium`.
+- **Threshold:** at least three distinct usernames.
+- **Time window:** 120 seconds, inclusive.
+- **Evidence:** three `authentication_failure` events with a source IP and username, sharing the source IP and having distinct usernames.
+- **ATT&CK:** No mapping assigned; this relationship alone does not support a defensible technique mapping.
+- **False positives:** shared NAT, scanners, monitoring, and legitimate administrative activity can produce this pattern.
+- **Limitations:** the rule does not prove password spraying, malicious intent, or compromise.
+
+### ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES
+
+- **Purpose:** identify one account targeted from multiple source IPs.
+- **Severity:** `medium`.
+- **Threshold:** at least three distinct source IPs.
+- **Time window:** 120 seconds, inclusive.
+- **Evidence:** three `authentication_failure` events with a username and source IP, sharing the username and having distinct source IPs.
+- **ATT&CK:** No mapping assigned; this relationship alone does not support a defensible technique mapping.
+- **False positives:** distributed legitimate clients, NAT/proxy changes, testing, and account-recovery activity can produce this pattern.
+- **Limitations:** the rule does not prove coordinated activity, password spraying, or compromise.
+
 ## ATT&CK mapping policy
 
 Mappings are explicit, offline, deterministic, and linked to source rule IDs. Only

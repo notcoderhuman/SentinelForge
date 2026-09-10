@@ -31,6 +31,8 @@ Only `sshd` and `sudo` are supported. The parser recognizes failed password, inv
 - `REPEATED_AUTH_FAILURE`: three failures for one account within 120 seconds (medium).
 - `SUCCESS_AFTER_FAILURES`: same-account success after a failure within 300 seconds (medium).
 - `SUSPICIOUS_SUDO_ACTIVITY`: observed sudo command (low).
+- `SOURCE_TARGETS_MULTIPLE_ACCOUNTS`: three distinct accounts targeted by one source IP within 120 seconds (medium).
+- `ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES`: one account targeted by three distinct source IPs within 120 seconds (medium).
 
 An alert is one detection result. Correlation findings identify supported
 multi-event evidence patterns, and risk assessment provides deterministic
