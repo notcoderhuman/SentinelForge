@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Dict, FrozenSet, List, Sequence
 
 from .alerts import Alert
+from .correlation_engine import correlate_alerts
 from .incidents import Incident, create_incident
+from .risk_engine import assess_risk
 
 
 def _alert_context(alert: Alert) -> FrozenSet[str]:
@@ -46,8 +48,26 @@ def derive_incidents(alerts: Sequence[Alert]) -> List[Incident]:
             del groups[group_index]
             del group_contexts[group_index]
 
-    incidents = [
-        create_incident(group, frozenset(group_context))
-        for group, group_context in zip(groups, group_contexts)
-    ]
+    incidents = []
+    for group, group_context in zip(groups, group_contexts):
+        incident = create_incident(group, frozenset(group_context))
+        correlations = tuple(correlate_alerts(group))
+        risk_assessment = assess_risk(group, correlations)
+        incident = Incident(
+            incident_id=incident.incident_id,
+            title=incident.title,
+            description=incident.description,
+            severity=incident.severity,
+            status=incident.status,
+            created_at=incident.created_at,
+            updated_at=incident.updated_at,
+            related_alert_ids=incident.related_alert_ids,
+            affected_users=incident.affected_users,
+            affected_entities=incident.affected_entities,
+            evidence=incident.evidence,
+            source_rule_ids=incident.source_rule_ids,
+            correlations=correlations,
+            risk_assessment=risk_assessment,
+        )
+        incidents.append(incident)
     return sorted(incidents, key=lambda incident: incident.incident_id)

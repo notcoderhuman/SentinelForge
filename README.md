@@ -32,7 +32,9 @@ Only `sshd` and `sudo` are supported. The parser recognizes failed password, inv
 - `SUCCESS_AFTER_FAILURES`: same-account success after a failure within 300 seconds (medium).
 - `SUSPICIOUS_SUDO_ACTIVITY`: observed sudo command (low).
 
-An alert is one detection result. Explicit ATT&CK mappings are linked to detection
+An alert is one detection result. Correlation findings identify supported
+multi-event evidence patterns, and risk assessment provides deterministic
+prioritization; neither is probability or proof of compromise. Explicit ATT&CK mappings are linked to detection
 rule IDs and are only added where the evidence supports them. An incident is a
 deterministic correlation of alerts that share explicit evidence context, such as
 the same username or source IP. An investigation is the structured analytical
@@ -40,6 +42,8 @@ context for exactly one incident. It preserves actual event-derived evidence and
 chronological timeline; it does not establish compromise. Incidents begin `open`
 and support the forward transitions `investigating`, `resolved`, and `closed`;
 `open → resolved` is also allowed.
+
+Risk scoring uses the highest alert severity as its base (`low=10`, `medium=30`, `high=50`, `critical=70`), adds 10 points per supported correlation finding up to 20, adds 5 points per distinct explicit ATT&CK technique up to 10, and caps the score at 100. Levels are `low` (0–29), `medium` (30–59), `high` (60–79), and `critical` (80–100). This is a transparent prioritization score, not probability.
 
 Thresholds are represented by `RuleConfig`; `rules/auth_rules.yaml` is a human-readable reference. See [detection documentation](docs/detections.md).
 

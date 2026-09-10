@@ -9,7 +9,9 @@ from typing import Any, Dict, FrozenSet, Iterable, Tuple
 
 from .alerts import Alert, ALLOWED_SEVERITIES
 from .attack import TechniqueMapping, mappings_for_rules
+from .correlation import CorrelationFinding
 from .events import SecurityEvent
+from .risk import RiskAssessment
 
 ALLOWED_STATUSES = frozenset({"open", "investigating", "resolved", "closed"})
 _ALLOWED_TRANSITIONS = {
@@ -37,6 +39,8 @@ class Incident:
     affected_entities: Tuple[str, ...]
     evidence: Tuple[SecurityEvent, ...]
     source_rule_ids: Tuple[str, ...] = ()
+    correlations: Tuple[CorrelationFinding, ...] = ()
+    risk_assessment: RiskAssessment | None = None
 
     @property
     def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
@@ -83,6 +87,8 @@ class Incident:
             affected_entities=self.affected_entities,
             evidence=self.evidence,
             source_rule_ids=self.source_rule_ids,
+            correlations=self.correlations,
+            risk_assessment=self.risk_assessment,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -100,6 +106,8 @@ class Incident:
             "affected_entities": list(self.affected_entities),
             "evidence": [event.to_dict() for event in self.evidence],
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
+            "correlations": [finding.to_dict() for finding in self.correlations],
+            "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,
         }
 
 

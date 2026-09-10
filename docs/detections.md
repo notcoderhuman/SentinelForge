@@ -33,3 +33,24 @@ Mappings are explicit, offline, deterministic, and linked to source rule IDs. On
 techniques supported by the current rule evidence are mapped. Unmapped rules remain
 valid and are not forced into a technique. A mapping is contextual metadata and does
 not prove adversary behavior or full ATT&CK coverage.
+
+## Correlation and risk
+
+Correlation findings are generated after detection and before incident derivation.
+They identify only these bounded, same-account sequences:
+
+- authentication failures followed by successful authentication within 300 seconds;
+- successful authentication followed by sudo activity within 300 seconds.
+
+Risk is a deterministic prioritization score, not probability or proof of compromise:
+
+```text
+base severity: low=10, medium=30, high=50, critical=70
+correlations: +10 each, capped at +20
+ATT&CK techniques: +5 each distinct technique, capped at +10
+final score: capped at 100
+```
+
+Risk levels are `low` (0–29), `medium` (30–59), `high` (60–79), and `critical`
+(80–100). Both correlation and risk preserve existing alert evidence and do not
+infer unsupported claims.

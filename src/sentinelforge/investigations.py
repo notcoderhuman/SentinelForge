@@ -7,7 +7,9 @@ from datetime import datetime
 from typing import Any, Dict, Tuple
 
 from .attack import TechniqueMapping, mappings_for_rules
+from .correlation import CorrelationFinding
 from .evidence import Evidence
+from .risk import RiskAssessment
 
 ALLOWED_STATUSES = frozenset({"active", "completed"})
 
@@ -67,6 +69,8 @@ class Investigation:
     timeline: Tuple[TimelineEntry, ...]
     analyst_notes: Tuple[AnalystNote, ...]
     source_rule_ids: Tuple[str, ...] = ()
+    correlations: Tuple[CorrelationFinding, ...] = ()
+    risk_assessment: RiskAssessment | None = None
 
     @property
     def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
@@ -106,4 +110,6 @@ class Investigation:
             "timeline": [entry.to_dict() for entry in self.timeline],
             "analyst_notes": [note.to_dict() for note in self.analyst_notes],
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
+            "correlations": [finding.to_dict() for finding in self.correlations],
+            "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,
         }
