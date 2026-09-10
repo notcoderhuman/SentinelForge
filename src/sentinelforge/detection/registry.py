@@ -46,4 +46,7 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
     RuleDefinition("ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES", "One account targeted by multiple sources",
                    "Authentication failures for one username originate from multiple source IPs.", "medium", 120, True,
                    ("three authentication_failure events from distinct source IPs for one username",)),
+    RuleDefinition("WINDOWS_PRIVILEGED_LOGON", "Windows privileged logon observed",
+                   "A Windows Security Event 4672 assigned special privileges to a new logon.", "low", 300, True,
+                   ("one Windows event_id 4672 with an explicit username",)),
 ))

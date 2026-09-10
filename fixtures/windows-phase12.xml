@@ -1,0 +1,3 @@
+<Events xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+<Event><System><Provider Name="Microsoft-Windows-Security-Auditing"/><EventID>4672</EventID><TimeCreated SystemTime="2025-01-04T00:00:00.000Z"/><Computer>WIN-P12-DEMO</Computer></System><EventData><Data Name="SubjectUserName">demo-admin</Data><Data Name="IpAddress">192.0.2.50</Data></EventData></Event>
+</Events>

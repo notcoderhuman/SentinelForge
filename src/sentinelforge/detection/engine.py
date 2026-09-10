@@ -29,6 +29,7 @@ class DetectionEngine:
         alerts.extend(self._sudo_activity(ordered_events))
         alerts.extend(self._source_targets_multiple_accounts(ordered_events))
         alerts.extend(self._account_targeted_by_multiple_sources(ordered_events))
+        alerts.extend(self._windows_privileged_logons(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
@@ -123,6 +124,16 @@ class DetectionEngine:
             "Observed authentication failures for account {entity} from multiple source IPs within the configured window.",
             lambda event: event.source_ip,
         )
+
+    def _windows_privileged_logons(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        definition = self.registry.get("WINDOWS_PRIVILEGED_LOGON")
+        return [create_alert(
+            "WINDOWS_PRIVILEGED_LOGON", definition.severity,
+            "Windows privileged logon observed.",
+            "A Windows 4672 event assigned special privileges to a new logon; this does not establish misuse.",
+            [event],
+        ) for event in events if event.source == "windows-security" and event.event_id == "4672"
+              and event.event_type == "privileged_logon" and event.username]
 
     def _distinct_entity_alerts(self, grouped_events: Dict[str, List[SecurityEvent]], threshold: int,
                                 window_seconds: int, rule_id: str, title: str, description: str,

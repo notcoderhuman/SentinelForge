@@ -7,7 +7,7 @@ from typing import Callable, Iterable, List, Sequence, Tuple
 
 from ..events import SecurityEvent
 from ..parsers.linux_auth import ParseDiagnostic, parse_lines
-from ..parsers.windows_security import parse_events as parse_windows_events
+from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
 from .reader import SourcePath, read_lines, read_sources
 
 
@@ -43,8 +43,8 @@ def ingest_file(source_path: SourcePath, parser: LineParser = parse_lines, sourc
         with open(source_path, "r", encoding="utf-8", errors="replace") as input_file:
             return ingest_lines([input_file.read()], parser=parser_for_source(source))
     if source == "windows_security":
-        with open(source_path, "r", encoding="utf-8", errors="replace") as input_file:
-            return ingest_lines([input_file.read()], parser=parser_for_source(source))
+        events, diagnostics = parse_windows_file(source_path)
+        return IngestionResult(events=events, diagnostics=diagnostics)
     return ingest_lines(read_lines(source_path), parser=parser)
 
 

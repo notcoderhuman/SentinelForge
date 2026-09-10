@@ -67,11 +67,22 @@ Windows Security Event IDs 4624, 4625, and 4672 normalize to
 existing authentication failure/success detections can naturally consume those
 normalized events. `privileged_logon` is not treated as sudo activity, so the
 existing sudo rule and sudo correlation are not forced onto Windows events.
-No Windows-specific detection or ATT&CK mapping is added in this phase.
+The focused Windows-specific `WINDOWS_PRIVILEGED_LOGON` rule reports explicit 4672 observations at low severity; it does not claim misuse and has no ATT&CK mapping. Existing generic authentication detections remain reusable for normalized 4624/4625 events.
 
 The parser uses explicit local XML fixtures and does not collect from live
 Windows Event Logs. Unsupported Windows variants and event IDs produce
  diagnostics rather than fabricated events.
+
+### WINDOWS_PRIVILEGED_LOGON
+
+- **Purpose:** make a Windows Event ID 4672 privileged-logon observation visible to analysts.
+- **Severity:** `low`.
+- **Threshold:** one event.
+- **Time window:** 300 seconds in metadata; the rule is event-scoped and does not aggregate events.
+- **Evidence:** one `windows-security` event with `event_id=4672`, `event_type=privileged_logon`, and an explicit username.
+- **ATT&CK:** No mapping assigned; the raw event does not establish misuse or a defensible technique by itself.
+- **False positives:** legitimate administrative logons and expected service or operational accounts can produce this event.
+- **Limitations:** the rule does not prove privilege abuse, command execution, or compromise.
 
 ## ATT&CK mapping policy
 

@@ -33,6 +33,7 @@ Only `sshd` and `sudo` are supported by the Linux parser. A controlled Windows S
 - `SUSPICIOUS_SUDO_ACTIVITY`: observed sudo command (low).
 - `SOURCE_TARGETS_MULTIPLE_ACCOUNTS`: three distinct accounts targeted by one source IP within 120 seconds (medium).
 - `ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES`: one account targeted by three distinct source IPs within 120 seconds (medium).
+- `WINDOWS_PRIVILEGED_LOGON`: Windows Event ID 4672 observed with an explicit user (low).
 
 An alert is one detection result. Correlation findings identify supported
 multi-event evidence patterns, and risk assessment provides deterministic
