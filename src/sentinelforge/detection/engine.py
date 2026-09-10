@@ -7,14 +7,17 @@ from typing import Dict, List, Sequence
 
 from ..alerts import Alert, create_alert
 from ..events import SecurityEvent
+from .registry import DEFAULT_RULE_REGISTRY, RuleRegistry
 from .rules import RuleConfig
 
 
 class DetectionEngine:
     """Evaluate configured rules without changing or enriching source events."""
 
-    def __init__(self, config: RuleConfig | None = None) -> None:
+    def __init__(self, config: RuleConfig | None = None,
+                 registry: RuleRegistry | None = None) -> None:
         self.config = config or RuleConfig()
+        self.registry = registry or DEFAULT_RULE_REGISTRY
 
     def detect(self, events: Sequence[SecurityEvent]) -> List[Alert]:
         """Return stable alerts for the supplied events in deterministic order."""
@@ -42,7 +45,7 @@ class DetectionEngine:
                 matching = failures[end_index - self.config.ssh_brute_force_threshold + 1:end_index + 1]
                 if matching[-1].timestamp - matching[0].timestamp <= window:
                     alerts.append(create_alert(
-                        "SSH_BRUTE_FORCE", "high", "Possible SSH brute-force activity detected.",
+                        "SSH_BRUTE_FORCE", self.registry.get("SSH_BRUTE_FORCE").severity, "Possible SSH brute-force activity detected.",
                         f"Observed {len(matching)} failed SSH authentications from {source_ip} within the configured window.", matching))
                     break
         return alerts
@@ -59,7 +62,7 @@ class DetectionEngine:
                 matching = failures[end_index - self.config.repeated_failure_threshold + 1:end_index + 1]
                 if matching[-1].timestamp - matching[0].timestamp <= window:
                     alerts.append(create_alert(
-                        "REPEATED_AUTH_FAILURE", "medium", "Repeated authentication failures observed.",
+                        "REPEATED_AUTH_FAILURE", self.registry.get("REPEATED_AUTH_FAILURE").severity, "Repeated authentication failures observed.",
                         f"Observed repeated failures for account {username}; the evidence does not establish account compromise.", matching))
                     break
         return alerts
@@ -77,14 +80,14 @@ class DetectionEngine:
             if failures:
                 evidence = failures + [success]
                 alerts.append(create_alert(
-                    "SUCCESS_AFTER_FAILURES", "medium", "Successful authentication followed repeated failures.",
+                    "SUCCESS_AFTER_FAILURES", self.registry.get("SUCCESS_AFTER_FAILURES").severity, "Successful authentication followed repeated failures.",
                     "A successful login followed earlier authentication failures; this pattern alone does not establish compromise.", evidence))
         return alerts
 
     def _sudo_activity(self, events: Sequence[SecurityEvent]) -> List[Alert]:
         if not self.config.sudo_enabled:
             return []
-        return [create_alert("SUSPICIOUS_SUDO_ACTIVITY", "low",
+        return [create_alert("SUSPICIOUS_SUDO_ACTIVITY", self.registry.get("SUSPICIOUS_SUDO_ACTIVITY").severity,
                              "Sudo activity observed for privileged command execution.",
                              "A sudo command was recorded. The command is not automatically considered malicious.", [event])
                 for event in events if event.event_type == "sudo_activity"]

@@ -16,12 +16,13 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 8. `DetectionEngine` sorts events and evaluates configurable, deterministic rules.
 9. An `Alert` is one detection result. It contains a stable ID, severity, title, description, evidence, and derived observables.
 10. Explicit ATT&CK mappings are looked up from detection rule IDs; no runtime inference or network download is used.
-11. `correlate_alerts` identifies only supported bounded sequences using matching account context.
-12. `assess_risk` calculates a bounded transparent prioritization score from alert severity, correlations, and explicit ATT&CK mappings.
-13. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP, and attaches matched local threat context.
-14. An `Incident` preserves related alert IDs and evidence, and exposes derived correlations, risk, observables, and context.
-15. `create_investigation` creates analytical context for exactly one incident and propagates derived data.
-16. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
+11. The rule registry provides validated metadata in deterministic rule-ID order, while detection functions remain explicit Python logic.
+12. `correlate_alerts` identifies only supported bounded sequences using matching account context.
+13. `assess_risk` calculates a bounded transparent prioritization score from alert severity, correlations, and explicit ATT&CK mappings.
+14. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP, and attaches matched local threat context.
+15. An `Incident` preserves related alert IDs and evidence, and exposes derived correlations, risk, observables, and context.
+16. `create_investigation` creates analytical context for exactly one incident and propagates derived data.
+17. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
 
 ## Correlation boundary
 

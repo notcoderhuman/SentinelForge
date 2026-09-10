@@ -1,4 +1,9 @@
-# Phase 1 detections
+# Detection rules
+
+Rule metadata is defined explicitly in the Python rule registry, while detector
+algorithms remain readable Python functions. Rule definitions do not execute code
+and `rules/auth_rules.yaml` remains reference metadata only.
+
 
 ## SSH_BRUTE_FORCE
 

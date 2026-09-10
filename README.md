@@ -45,7 +45,7 @@ and support the forward transitions `investigating`, `resolved`, and `closed`;
 
 Risk scoring uses the highest alert severity as its base (`low=10`, `medium=30`, `high=50`, `critical=70`), adds 10 points per supported correlation finding up to 20, adds 5 points per distinct explicit ATT&CK technique up to 10, and caps the score at 100. Levels are `low` (0–29), `medium` (30–59), `high` (60–79), and `critical` (80–100). This is a transparent prioritization score, not probability.
 
-Thresholds are represented by `RuleConfig`; `rules/auth_rules.yaml` is a human-readable reference. See [detection documentation](docs/detections.md).
+Rule metadata is held in an explicit deterministic registry, while detection logic remains in readable Python functions. Rule IDs are stable and registry iteration is deterministic; metadata files are never executed. Thresholds are represented by `RuleConfig`; `rules/auth_rules.yaml` is a human-readable reference. See [detection documentation](docs/detections.md).
 
 ## Installation and usage
 
