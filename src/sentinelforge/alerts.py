@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from .attack import TechniqueMapping, mappings_for_rule
 from .events import SecurityEvent
+from .observable_engine import extract_observables
 
 ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 
@@ -32,6 +33,11 @@ class Alert:
         """Return explicit ATT&CK mappings for this alert's detection rule."""
         return mappings_for_rule(self.rule_id)
 
+    @property
+    def observables(self):
+        """Return observables extracted from this alert's actual evidence."""
+        return tuple(extract_observables(self.evidence))
+
     def __post_init__(self) -> None:
         if self.severity not in ALLOWED_SEVERITIES:
             raise ValueError(f"unsupported severity: {self.severity}")
@@ -50,6 +56,7 @@ class Alert:
             "evidence": [event.to_dict() for event in self.evidence],
             "source": self.source,
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
+            "observables": [observable.to_dict() for observable in self.observables],
         }
 
 

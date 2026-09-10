@@ -55,6 +55,7 @@ def create_investigation(incident: Incident) -> Investigation:
         source_rule_ids=incident.source_rule_ids,
         correlations=incident.correlations,
         risk_assessment=incident.risk_assessment,
+        threat_context=incident.threat_context,
     )
 
 

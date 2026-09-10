@@ -10,6 +10,7 @@ from .attack import TechniqueMapping, mappings_for_rules
 from .correlation import CorrelationFinding
 from .evidence import Evidence
 from .risk import RiskAssessment
+from .threat_context import ThreatContext
 
 ALLOWED_STATUSES = frozenset({"active", "completed"})
 
@@ -71,6 +72,7 @@ class Investigation:
     source_rule_ids: Tuple[str, ...] = ()
     correlations: Tuple[CorrelationFinding, ...] = ()
     risk_assessment: RiskAssessment | None = None
+    threat_context: Tuple[ThreatContext, ...] = ()
 
     @property
     def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
@@ -112,4 +114,5 @@ class Investigation:
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
             "correlations": [finding.to_dict() for finding in self.correlations],
             "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,
+            "threat_context": [context.to_dict() for context in self.threat_context],
         }

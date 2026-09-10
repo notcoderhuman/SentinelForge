@@ -3,23 +3,25 @@
 SentinelForge's Phase 1 through Phase 6 foundation is an offline pipeline:
 
 ```text
-Event → Ingestion → Detection → Alert → Correlation → Risk Assessment → Incident → Investigation → Evidence / Timeline
+Event → Observable Extraction → Threat Context → Detection → Alert → Correlation → Risk Assessment → Incident → Investigation → Evidence / Timeline
 ```
 
 1. The ingestion reader opens explicitly supplied local text files as untrusted input.
 2. The ingestion pipeline passes lines to a source-specific parser; it does not interpret log syntax itself.
 3. `linux_auth.parse_lines` recognizes the documented ISO-UTC/syslog-like format.
 4. Each supported line becomes an immutable `SecurityEvent`, with normalized fields and the exact raw line retained.
-5. The pipeline returns events together with non-fatal parser diagnostics.
-6. `DetectionEngine` sorts events and evaluates configurable, deterministic rules.
-7. An `Alert` is one detection result. It contains a stable ID, severity, title, description, and evidence.
-8. Explicit ATT&CK mappings are looked up from detection rule IDs; no runtime inference or network download is used.
-9. `correlate_alerts` identifies only supported bounded sequences using matching account context.
-10. `assess_risk` calculates a bounded transparent prioritization score from alert severity, correlations, and explicit ATT&CK mappings.
-11. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP.
-12. An `Incident` preserves related alert IDs and evidence, and exposes derived correlations and risk.
-13. `create_investigation` creates analytical context for exactly one incident and propagates derived correlation and risk data.
-14. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
+5. `extract_observables` conservatively extracts supported IPv4, IPv6, domain, URL, and username values from actual event fields and selected message content.
+6. `match_context` performs exact matching against explicitly supplied local context; unknown values remain unknown.
+7. The pipeline returns events together with non-fatal parser diagnostics.
+8. `DetectionEngine` sorts events and evaluates configurable, deterministic rules.
+9. An `Alert` is one detection result. It contains a stable ID, severity, title, description, evidence, and derived observables.
+10. Explicit ATT&CK mappings are looked up from detection rule IDs; no runtime inference or network download is used.
+11. `correlate_alerts` identifies only supported bounded sequences using matching account context.
+12. `assess_risk` calculates a bounded transparent prioritization score from alert severity, correlations, and explicit ATT&CK mappings.
+13. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP, and attaches matched local threat context.
+14. An `Incident` preserves related alert IDs and evidence, and exposes derived correlations, risk, observables, and context.
+15. `create_investigation` creates analytical context for exactly one incident and propagates derived data.
+16. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
 
 ## Correlation boundary
 

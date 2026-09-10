@@ -6,7 +6,7 @@ It is **not** an enterprise SIEM, production SOC platform, or autonomous securit
 
 ## Architecture
 
-`Event → ingestion → detection → alert → incident → investigation → evidence / timeline`
+`Event → observable extraction → threat context → alert / incident / investigation → evidence / timeline`
 
 Phase 2 adds a small ingestion boundary. The reader handles explicit local file
 input, while the pipeline passes lines to the existing source-specific parser and
@@ -15,7 +15,7 @@ from related alerts without replacing the alert model. Phase 4 creates an
 investigation from one incident, preserving event-derived evidence and a
 chronological timeline. It does not add new log formats or duplicate parser logic.
 
-The normalized `SecurityEvent` includes a timezone-aware UTC timestamp, source, event type, optional username/source IP/hostname/process, message, and the untouched raw line. Missing source data remains `None`.
+The normalized `SecurityEvent` includes a timezone-aware UTC timestamp, source, event type, optional username/source IP/hostname/process, message, and the untouched raw line. Missing source data remains `None`. Phase 7 extracts conservative observables from actual event fields and selected message patterns. Local threat context is explicit demonstration metadata in `rules/threat_context.json`, not a threat feed; unknown observables remain unknown and no runtime network enrichment exists.
 
 ## Supported events
 
@@ -56,6 +56,7 @@ python -m sentinelforge parse fixtures/auth.log
 python -m sentinelforge detect fixtures/auth.log
 python -m sentinelforge incident fixtures/auth.log
 python -m sentinelforge investigate fixtures/auth.log
+python -m sentinelforge observables fixtures/auth.log
 ```
 
 The CLI reads only the path explicitly supplied by the user and emits JSON. It uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.

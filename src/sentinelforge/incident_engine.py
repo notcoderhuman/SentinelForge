@@ -8,6 +8,9 @@ from .alerts import Alert
 from .correlation_engine import correlate_alerts
 from .incidents import Incident, create_incident
 from .risk_engine import assess_risk
+from .observable_engine import extract_observables
+from .threat_context import ThreatContext
+from .threat_context_engine import match_context
 
 
 def _alert_context(alert: Alert) -> FrozenSet[str]:
@@ -23,7 +26,7 @@ def _alert_context(alert: Alert) -> FrozenSet[str]:
     return frozenset(context)
 
 
-def derive_incidents(alerts: Sequence[Alert]) -> List[Incident]:
+def derive_incidents(alerts: Sequence[Alert], threat_context: Sequence[ThreatContext] = ()) -> List[Incident]:
     """Group alerts with shared evidence context into deterministic incidents."""
     ordered_alerts = sorted(alerts, key=lambda alert: alert.alert_id)
     contexts = [_alert_context(alert) for alert in ordered_alerts]
@@ -68,6 +71,7 @@ def derive_incidents(alerts: Sequence[Alert]) -> List[Incident]:
             source_rule_ids=incident.source_rule_ids,
             correlations=correlations,
             risk_assessment=risk_assessment,
+            threat_context=tuple(match_context(extract_observables(incident.evidence), threat_context)),
         )
         incidents.append(incident)
     return sorted(incidents, key=lambda incident: incident.incident_id)

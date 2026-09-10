@@ -1,0 +1,13 @@
+{
+  "observables": [
+    {
+      "type": "ipv4",
+      "value": "203.0.113.10",
+      "context_type": "suspicious",
+      "label": "documented demonstration source",
+      "confidence": 70,
+      "rationale": "Explicit local demonstration metadata only; this is not a claim about real infrastructure.",
+      "source": "local-demo"
+    }
+  ]
+}

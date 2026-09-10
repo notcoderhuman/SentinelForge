@@ -11,7 +11,9 @@ from .alerts import Alert, ALLOWED_SEVERITIES
 from .attack import TechniqueMapping, mappings_for_rules
 from .correlation import CorrelationFinding
 from .events import SecurityEvent
+from .observable_engine import extract_observables
 from .risk import RiskAssessment
+from .threat_context import ThreatContext
 
 ALLOWED_STATUSES = frozenset({"open", "investigating", "resolved", "closed"})
 _ALLOWED_TRANSITIONS = {
@@ -41,6 +43,7 @@ class Incident:
     source_rule_ids: Tuple[str, ...] = ()
     correlations: Tuple[CorrelationFinding, ...] = ()
     risk_assessment: RiskAssessment | None = None
+    threat_context: Tuple[ThreatContext, ...] = ()
 
     @property
     def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
@@ -89,6 +92,7 @@ class Incident:
             source_rule_ids=self.source_rule_ids,
             correlations=self.correlations,
             risk_assessment=self.risk_assessment,
+            threat_context=self.threat_context,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -108,6 +112,8 @@ class Incident:
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
             "correlations": [finding.to_dict() for finding in self.correlations],
             "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,
+            "observables": [observable.to_dict() for observable in extract_observables(self.evidence)],
+            "threat_context": [context.to_dict() for context in self.threat_context],
         }
 
 
