@@ -13,6 +13,13 @@ from ..application import analyze_request, get_resource, list_resource, list_run
 
 LOGGER = logging.getLogger(__name__)
 MAX_BODY_BYTES = 64 * 1024
+_WEB_ROOT = Path(__file__).resolve().parents[3] / "web"
+_STATIC_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+    "/app.js": ("app.js", "application/javascript; charset=utf-8"),
+}
 _ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security"})
 _ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 
@@ -61,6 +68,24 @@ class _Handler(BaseHTTPRequestHandler):
     def _error(self, status: int, message: str) -> None:
         self._send(status, {"error": message})
 
+    def _send_static(self, path: str) -> bool:
+        entry = _STATIC_FILES.get(path)
+        if entry is None:
+            return False
+        filename, content_type = entry
+        try:
+            data = (_WEB_ROOT / filename).read_bytes()
+        except OSError:
+            self._error(500, "web console unavailable")
+            return True
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+        return True
+
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Allow", "GET, POST, OPTIONS")
@@ -70,6 +95,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         try:
             parts = urlsplit(self.path)
+            if self._send_static(parts.path):
+                return
             query = parse_qs(parts.query, keep_blank_values=True)
             values = {key: items[-1] for key, items in query.items()}
             payload, status = self.server.api.get(parts.path, values)
@@ -79,6 +106,9 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception:
             LOGGER.exception("unexpected GET failure")
             self._error(500, "internal server error")
+
+    def do_HEAD(self) -> None:
+        self._error(405, "method not allowed")
 
     def do_POST(self) -> None:
         try:

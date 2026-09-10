@@ -61,6 +61,24 @@ bounded and validated, paths remain local to the working directory, errors are
 concise JSON, and broad CORS is intentionally absent. This is a local
 development/analyst interface, not an authenticated production service.
 
+## SOC web console boundary
+
+Phase 15 adds a plain HTML/CSS/JavaScript analyst console in `web/`. Only the
+known assets `/`, `/index.html`, `/styles.css`, and `/app.js` are served by the
+local API server; arbitrary filesystem paths, source files, and databases are
+never exposed. The browser uses a small API client for health, runs, alerts,
+incidents, investigations, detail views, and POST `/analyze`. It does not read
+local files or implement detection, correlation, risk, ATT&CK, or persistence
+logic.
+
+The console provides Overview, Alerts, Incidents, Investigations, and Runs pages,
+read-only details, filters, empty/error states, API status, and analysis input.
+Analyst notes are read-only because no authenticated write API exists. Start it
+with `python -m sentinelforge serve --host 127.0.0.1 --port 8765 --database
+data/sentinelforge.db`, then open `http://127.0.0.1:8765/`. This is a local
+development/analyst interface with no authentication, RBAC, or public deployment
+support.
+
 ## Analyst reporting boundary
 
 The `analyze` command is a thin orchestration layer over the existing ingestion,

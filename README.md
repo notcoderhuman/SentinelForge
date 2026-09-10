@@ -68,9 +68,10 @@ python -m sentinelforge analyze fixtures/windows-security.xml --source windows_s
 python -m sentinelforge analyze fixtures/auth.log --database data/sentinelforge.db
 python -m sentinelforge history --database data/sentinelforge.db
 python -m sentinelforge serve --host 127.0.0.1 --port 8765 --database data/sentinelforge.db
+# Then open http://127.0.0.1:8765/ in a browser
 ```
 
-The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. Optional local SQLite persistence is enabled with `--database`; `history` lists stored analysis runs. SQLite is local-only, versioned, and does not add cross-run correlation. A local development HTTP API is available with `serve`; it binds to loopback by default and exposes health, persisted read endpoints, and POST `/analyze`. The API has no authentication and is not a public production service. CLI and API share the same application/reporting orchestration. The CLI uses the local ingestion reader and parsers, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
+The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. Optional local SQLite persistence is enabled with `--database`; `history` lists stored analysis runs. SQLite is local-only, versioned, and does not add cross-run correlation. A local development HTTP API and SOC web console are available with `serve`; it binds to loopback by default, serves the console at `http://127.0.0.1:8765/`, and exposes health, persisted read endpoints, and POST `/analyze`. The browser consumes API data only and analyst notes are read-only. The API has no authentication/RBAC and is not a public production service. CLI and API share the same application/reporting orchestration. The CLI uses the local ingestion reader and parsers, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
 
 ## Testing
 
