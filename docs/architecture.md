@@ -15,8 +15,18 @@ Event → Ingestion → Detection → Alert → Incident → Investigation → E
 7. An `Alert` is one detection result. It contains a stable ID, severity, title, description, and evidence.
 8. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP.
 9. An `Incident` preserves related alert IDs and evidence, and starts with status `open`.
-10. `create_investigation` creates analytical context for exactly one incident.
-11. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
+10. Explicit ATT&CK mappings are looked up from detection rule IDs; no runtime inference or network download is used.
+11. Incidents derive their technique mappings from related alert rules.
+12. `create_investigation` creates analytical context for exactly one incident.
+13. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
+
+## ATT&CK mapping boundary
+
+The mapping layer is an explicit reviewed allowlist keyed by detection rule ID.
+It is deterministic, offline, source-rule-linked, and evidence-limited. A missing
+mapping is intentional when the current evidence does not support a defensible
+technique. These mappings are contextual metadata, not proof of adversary behavior
+and not full MITRE ATT&CK coverage.
 
 ## Investigation and evidence boundary
 

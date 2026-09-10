@@ -32,13 +32,14 @@ Only `sshd` and `sudo` are supported. The parser recognizes failed password, inv
 - `SUCCESS_AFTER_FAILURES`: same-account success after a failure within 300 seconds (medium).
 - `SUSPICIOUS_SUDO_ACTIVITY`: observed sudo command (low).
 
-An alert is one detection result. An incident is a deterministic correlation of
-alerts that share explicit evidence context, such as the same username or source
-IP. An investigation is the structured analytical context for exactly one
-incident. It preserves actual event-derived evidence and a chronological
-timeline; it does not establish compromise. Incidents begin `open` and support
-the forward transitions `investigating`, `resolved`, and `closed`; `open → resolved`
-is also allowed.
+An alert is one detection result. Explicit ATT&CK mappings are linked to detection
+rule IDs and are only added where the evidence supports them. An incident is a
+deterministic correlation of alerts that share explicit evidence context, such as
+the same username or source IP. An investigation is the structured analytical
+context for exactly one incident. It preserves actual event-derived evidence and a
+chronological timeline; it does not establish compromise. Incidents begin `open`
+and support the forward transitions `investigating`, `resolved`, and `closed`;
+`open → resolved` is also allowed.
 
 Thresholds are represented by `RuleConfig`; `rules/auth_rules.yaml` is a human-readable reference. See [detection documentation](docs/detections.md).
 

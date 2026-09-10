@@ -52,6 +52,7 @@ def create_investigation(incident: Incident) -> Investigation:
         evidence=evidence,
         timeline=_build_timeline(evidence),
         analyst_notes=(),
+        source_rule_ids=incident.source_rule_ids,
     )
 
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List
 
+from .attack import TechniqueMapping, mappings_for_rule
 from .events import SecurityEvent
 
 ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
@@ -26,6 +27,11 @@ class Alert:
     evidence: List[SecurityEvent]
     source: str = "linux-auth"
 
+    @property
+    def attack_mappings(self) -> tuple[TechniqueMapping, ...]:
+        """Return explicit ATT&CK mappings for this alert's detection rule."""
+        return mappings_for_rule(self.rule_id)
+
     def __post_init__(self) -> None:
         if self.severity not in ALLOWED_SEVERITIES:
             raise ValueError(f"unsupported severity: {self.severity}")
@@ -43,6 +49,7 @@ class Alert:
             "description": self.description,
             "evidence": [event.to_dict() for event in self.evidence],
             "source": self.source,
+            "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
         }
 
 

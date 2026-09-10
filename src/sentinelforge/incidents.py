@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, FrozenSet, Iterable, Tuple
 
 from .alerts import Alert, ALLOWED_SEVERITIES
+from .attack import TechniqueMapping, mappings_for_rules
 from .events import SecurityEvent
 
 ALLOWED_STATUSES = frozenset({"open", "investigating", "resolved", "closed"})
@@ -35,6 +36,12 @@ class Incident:
     affected_users: Tuple[str, ...]
     affected_entities: Tuple[str, ...]
     evidence: Tuple[SecurityEvent, ...]
+    source_rule_ids: Tuple[str, ...] = ()
+
+    @property
+    def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
+        """Derive ATT&CK mappings from the incident's related alert rules."""
+        return mappings_for_rules(self.source_rule_ids)
 
     def __post_init__(self) -> None:
         if not self.incident_id or not self.title or not self.description:
@@ -75,6 +82,7 @@ class Incident:
             affected_users=self.affected_users,
             affected_entities=self.affected_entities,
             evidence=self.evidence,
+            source_rule_ids=self.source_rule_ids,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -91,6 +99,7 @@ class Incident:
             "affected_users": list(self.affected_users),
             "affected_entities": list(self.affected_entities),
             "evidence": [event.to_dict() for event in self.evidence],
+            "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
         }
 
 
@@ -125,6 +134,7 @@ def create_incident(alerts: Iterable[Alert], context: FrozenSet[str]) -> Inciden
         created_at=created_at,
         updated_at=updated_at,
         related_alert_ids=tuple(alert.alert_id for alert in ordered_alerts),
+        source_rule_ids=tuple(sorted({alert.rule_id for alert in ordered_alerts})),
         affected_users=users,
         affected_entities=entities,
         evidence=unique_evidence,

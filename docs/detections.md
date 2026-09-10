@@ -6,7 +6,7 @@
 - **Evidence:** five or more `authentication_failure` events from one source IP and `sshd`.
 - **Default window:** 120 seconds; severity `high`.
 - **Limitations:** shared NAT, scanners, and test activity can produce this pattern. It does not identify an attacker or prove compromise.
-- **ATT&CK:** T1110 (Brute Force) is a contextual mapping, not detection logic.
+- **ATT&CK:** Explicit mapping to T1110 (Brute Force), with Credential Access tactic. This is a contextual mapping, not detection logic or proof of adversary behavior.
 
 ## REPEATED_AUTH_FAILURE
 
@@ -25,3 +25,11 @@
 - **Purpose:** make privileged command execution observable.
 - **Evidence:** a supported `sudo` line containing `user=` and `command=`; severity `low`.
 - **Limitations:** the command is not automatically malicious. No command is executed by SentinelForge.
+- **ATT&CK:** No mapping is assigned; observed sudo activity alone is insufficient for a defensible technique mapping.
+
+## ATT&CK mapping policy
+
+Mappings are explicit, offline, deterministic, and linked to source rule IDs. Only
+techniques supported by the current rule evidence are mapped. Unmapped rules remain
+valid and are not forced into a technique. A mapping is contextual metadata and does
+not prove adversary behavior or full ATT&CK coverage.

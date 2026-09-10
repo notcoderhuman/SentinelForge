@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Tuple
 
+from .attack import TechniqueMapping, mappings_for_rules
 from .evidence import Evidence
 
 ALLOWED_STATUSES = frozenset({"active", "completed"})
@@ -65,6 +66,12 @@ class Investigation:
     evidence: Tuple[Evidence, ...]
     timeline: Tuple[TimelineEntry, ...]
     analyst_notes: Tuple[AnalystNote, ...]
+    source_rule_ids: Tuple[str, ...] = ()
+
+    @property
+    def attack_mappings(self) -> Tuple[TechniqueMapping, ...]:
+        """Derive ATT&CK mappings from the linked incident's rule IDs."""
+        return mappings_for_rules(self.source_rule_ids)
 
     def __post_init__(self) -> None:
         if not self.investigation_id or not self.incident_id:
@@ -98,4 +105,5 @@ class Investigation:
             "evidence": [item.to_dict() for item in self.evidence],
             "timeline": [entry.to_dict() for entry in self.timeline],
             "analyst_notes": [note.to_dict() for note in self.analyst_notes],
+            "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
         }
