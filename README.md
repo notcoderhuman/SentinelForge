@@ -57,9 +57,12 @@ python -m sentinelforge detect fixtures/auth.log
 python -m sentinelforge incident fixtures/auth.log
 python -m sentinelforge investigate fixtures/auth.log
 python -m sentinelforge observables fixtures/auth.log
+python -m sentinelforge analyze fixtures/auth.log
+python -m sentinelforge analyze fixtures/auth.log --json
+python -m sentinelforge analyze fixtures/auth.log --severity high
 ```
 
-The CLI reads only the path explicitly supplied by the user and emits JSON. It uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
+The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. The CLI uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
 
 ## Testing
 

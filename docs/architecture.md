@@ -23,6 +23,15 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 15. An `Incident` preserves related alert IDs and evidence, and exposes derived correlations, risk, observables, and context.
 16. `create_investigation` creates analytical context for exactly one incident and propagates derived data.
 17. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
+18. The `analyze` command orchestrates these existing components and passes their results to the reporting layer.
+
+## Analyst reporting boundary
+
+The `analyze` command is a thin orchestration layer over the existing ingestion,
+detection, observable/context, incident, and investigation components. Reporting
+contains presentation and filtering logic only. Default output is a concise human-
+readable summary; `--json` returns deterministic structured results. Severity and
+incident filters affect displayed results only and do not alter detection behavior.
 
 ## Correlation boundary
 
