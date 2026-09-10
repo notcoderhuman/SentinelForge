@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,7 @@ from .ingestion.pipeline import ingest_file
 from .investigation_engine import create_investigation
 from .observable_engine import extract_observables
 from .threat_context_engine import load_context
+from .storage import AnalysisRepository, Database
 
 SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 DEFAULT_CONTEXT_PATH = Path("rules/threat_context.json")
@@ -38,7 +40,8 @@ def _filter_incidents(incidents: list, incident_id: Optional[str], severity: Opt
 
 
 def analyze_file(path: str, severity: Optional[str] = None,
-                 incident_id: Optional[str] = None, source: str = "linux_auth") -> Dict[str, Any]:
+                 incident_id: Optional[str] = None, source: str = "linux_auth",
+                 database: Optional[str] = None) -> Dict[str, Any]:
     """Run existing pipeline components and return a filtered structured report."""
     ingestion_result = ingest_file(path, source=source)
     events = ingestion_result.events
@@ -47,6 +50,22 @@ def analyze_file(path: str, severity: Optional[str] = None,
     context = load_context(DEFAULT_CONTEXT_PATH)
     all_incidents = derive_incidents(all_alerts, context)
     all_investigations = [create_investigation(incident) for incident in all_incidents]
+    if database:
+        run_id = uuid.uuid4().hex
+        run = {
+            "run_id": run_id,
+            "started_at": events[0].timestamp.isoformat().replace("+00:00", "Z") if events else "",
+            "source": path,
+            "source_type": source,
+            "event_count": len(events),
+            "diagnostic_count": len(diagnostics),
+        }
+        with Database(database) as db:
+            repository = AnalysisRepository(db)
+            repository.save_run(run_id, run)
+            repository.save_alerts(all_alerts, run_id)
+            repository.save_incidents(all_incidents, run_id)
+            repository.save_investigations(all_investigations)
 
     selected_alerts = _filter_alerts(all_alerts, severity)
     selected_incidents = _filter_incidents(all_incidents, incident_id, severity)

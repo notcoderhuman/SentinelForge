@@ -24,6 +24,16 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 16. `create_investigation` creates analytical context for exactly one incident and propagates derived data.
 17. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
 18. The `analyze` command orchestrates these existing components and passes their results to the reporting layer.
+19. Optional local SQLite persistence stores validated analysis runs and derived alerts, incidents, investigations, evidence, and notes behind a repository boundary.
+
+## Persistence boundary
+
+Phase 13 adds an optional local SQLite boundary. `Database` owns schema
+initialization, foreign-key enforcement, schema versioning, and transactions;
+`AnalysisRepository` stores domain serialization without placing SQL in detection,
+correlation, risk, incident, or investigation logic. Persistence is idempotent by
+stable entity IDs and does not perform cross-run correlation. The database path is
+always explicitly supplied by `--database`.
 
 ## Analyst reporting boundary
 

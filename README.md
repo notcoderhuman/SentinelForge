@@ -65,9 +65,11 @@ python -m sentinelforge analyze fixtures/auth.log --json
 python -m sentinelforge analyze fixtures/auth.log --severity high
 python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security
 python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security --json
+python -m sentinelforge analyze fixtures/auth.log --database data/sentinelforge.db
+python -m sentinelforge history --database data/sentinelforge.db
 ```
 
-The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. The CLI uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
+The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. Optional local SQLite persistence is enabled with `--database`; `history` lists stored analysis runs. SQLite is local-only, versioned, and does not add cross-run correlation. The CLI uses the local ingestion reader and parsers, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.
 
 ## Testing
 

@@ -27,6 +27,9 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--severity", choices=("low", "medium", "high", "critical"))
     analyze_parser.add_argument("--incident", dest="incident_id")
     analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security"), default="linux_auth")
+    analyze_parser.add_argument("--database", help="local SQLite database path")
+    history_parser = subparsers.add_parser("history")
+    history_parser.add_argument("--database", required=True, help="local SQLite database path")
     return parser
 
 
@@ -57,11 +60,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run an existing command or the unified analyst workflow."""
     arguments = _build_parser().parse_args(argv)
     if arguments.command == "analyze":
-        report = analyze_file(arguments.path, arguments.severity, arguments.incident_id, arguments.source)
+        report = analyze_file(arguments.path, arguments.severity, arguments.incident_id, arguments.source, arguments.database)
         if arguments.json:
             print(json.dumps(report, indent=2, sort_keys=True))
         else:
             print(render_human_report(report))
+        return 0
+    if arguments.command == "history":
+        from .storage import AnalysisRepository, Database
+        with Database(arguments.database) as db:
+            print(json.dumps(AnalysisRepository(db).list_runs(), indent=2, sort_keys=True))
         return 0
     output = _run_existing_command(arguments)
     print(json.dumps(output, indent=2, sort_keys=True))
