@@ -7,6 +7,7 @@ import json
 from typing import Sequence
 
 from .detection.engine import DetectionEngine
+from .incident_engine import derive_incidents
 from .ingestion.pipeline import ingest_file
 
 
@@ -14,7 +15,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run ``parse`` or ``detect`` against an explicitly supplied file."""
     parser = argparse.ArgumentParser(description="SentinelForge defensive log analysis")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("parse", "detect"):
+    for command in ("parse", "detect", "incident"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("path", help="path to a documented auth fixture")
     arguments = parser.parse_args(argv)
@@ -26,8 +27,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                   "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}
     else:
         alerts = DetectionEngine().detect(events)
-        output = {"alerts": [alert.to_dict() for alert in alerts],
-                  "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}
+        if arguments.command == "detect":
+            output = {"alerts": [alert.to_dict() for alert in alerts],
+                      "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}
+        else:
+            incidents = derive_incidents(alerts)
+            output = {"incidents": [incident.to_dict() for incident in incidents],
+                      "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}
     print(json.dumps(output, indent=2, sort_keys=True))
     return 0
 
