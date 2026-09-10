@@ -23,7 +23,7 @@ The controlled fixture format is:
 
 `YYYY-MM-DDTHH:MM:SSZ hostname process[pid]: message`
 
-Only `sshd` and `sudo` are supported. The parser recognizes failed password, invalid user, accepted password, and sudo lines containing `user=` and `command=`. Other lines produce diagnostics rather than being silently reinterpreted.
+Only `sshd` and `sudo` are supported by the Linux parser. A controlled Windows Security Event XML parser is also available through explicit `--source windows_security` selection. It supports event IDs 4624, 4625, and 4672, mapping them to successful authentication, failed authentication, and privileged logon. This is fixture-based parsing only; it does not access live Windows Event Logs or support every Windows XML variant.
 
 ## Detections
 
@@ -62,6 +62,8 @@ python -m sentinelforge observables fixtures/auth.log
 python -m sentinelforge analyze fixtures/auth.log
 python -m sentinelforge analyze fixtures/auth.log --json
 python -m sentinelforge analyze fixtures/auth.log --severity high
+python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security
+python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security --json
 ```
 
 The CLI reads only the path explicitly supplied by the user and emits JSON. The `analyze` command provides a concise human-readable report by default or deterministic structured output with `--json`. It supports display-only `--severity` and `--incident` filters. The CLI uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.

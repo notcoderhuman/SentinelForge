@@ -8,7 +8,7 @@ Event → Observable Extraction → Threat Context → Detection → Alert → C
 
 1. The ingestion reader opens explicitly supplied local text files as untrusted input.
 2. The ingestion pipeline passes lines to a source-specific parser; it does not interpret log syntax itself.
-3. `linux_auth.parse_lines` recognizes the documented ISO-UTC/syslog-like format.
+3. `linux_auth.parse_lines` recognizes the documented ISO-UTC/syslog-like format; `windows_security.parse_file` explicitly parses the controlled Windows Security Event XML fixture format.
 4. Each supported line becomes an immutable `SecurityEvent`, with normalized fields and the exact raw line retained.
 5. `extract_observables` conservatively extracts supported IPv4, IPv6, domain, URL, and username values from actual event fields and selected message content.
 6. `match_context` performs exact matching against explicitly supplied local context; unknown values remain unknown.

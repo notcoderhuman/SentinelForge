@@ -26,6 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--json", action="store_true", help="emit deterministic JSON")
     analyze_parser.add_argument("--severity", choices=("low", "medium", "high", "critical"))
     analyze_parser.add_argument("--incident", dest="incident_id")
+    analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security"), default="linux_auth")
     return parser
 
 
@@ -56,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run an existing command or the unified analyst workflow."""
     arguments = _build_parser().parse_args(argv)
     if arguments.command == "analyze":
-        report = analyze_file(arguments.path, arguments.severity, arguments.incident_id)
+        report = analyze_file(arguments.path, arguments.severity, arguments.incident_id, arguments.source)
         if arguments.json:
             print(json.dumps(report, indent=2, sort_keys=True))
         else:

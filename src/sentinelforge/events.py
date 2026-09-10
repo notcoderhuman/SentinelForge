@@ -24,6 +24,7 @@ class SecurityEvent:
     source_ip: Optional[str]
     message: str
     raw: str
+    event_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.timestamp.tzinfo is None:
@@ -35,4 +36,6 @@ class SecurityEvent:
         """Return a JSON-friendly dictionary representation."""
         values = asdict(self)
         values["timestamp"] = self.timestamp.isoformat().replace("+00:00", "Z")
+        if self.event_id is None:
+            values.pop("event_id")
         return values

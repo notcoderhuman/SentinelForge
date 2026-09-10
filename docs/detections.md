@@ -60,6 +60,19 @@ demonstration data.
 - **False positives:** distributed legitimate clients, NAT/proxy changes, testing, and account-recovery activity can produce this pattern.
 - **Limitations:** the rule does not prove coordinated activity, password spraying, or compromise.
 
+## Windows parser compatibility
+
+Windows Security Event IDs 4624, 4625, and 4672 normalize to
+`authentication_success`, `authentication_failure`, and `privileged_logon`. The
+existing authentication failure/success detections can naturally consume those
+normalized events. `privileged_logon` is not treated as sudo activity, so the
+existing sudo rule and sudo correlation are not forced onto Windows events.
+No Windows-specific detection or ATT&CK mapping is added in this phase.
+
+The parser uses explicit local XML fixtures and does not collect from live
+Windows Event Logs. Unsupported Windows variants and event IDs produce
+ diagnostics rather than fabricated events.
+
 ## ATT&CK mapping policy
 
 Mappings are explicit, offline, deterministic, and linked to source rule IDs. Only

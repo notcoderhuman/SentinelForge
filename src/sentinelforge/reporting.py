@@ -38,9 +38,9 @@ def _filter_incidents(incidents: list, incident_id: Optional[str], severity: Opt
 
 
 def analyze_file(path: str, severity: Optional[str] = None,
-                 incident_id: Optional[str] = None) -> Dict[str, Any]:
+                 incident_id: Optional[str] = None, source: str = "linux_auth") -> Dict[str, Any]:
     """Run existing pipeline components and return a filtered structured report."""
-    ingestion_result = ingest_file(path)
+    ingestion_result = ingest_file(path, source=source)
     events = ingestion_result.events
     diagnostics = ingestion_result.diagnostics
     all_alerts = DetectionEngine().detect(events)
