@@ -6,13 +6,14 @@ It is **not** an enterprise SIEM, production SOC platform, or autonomous securit
 
 ## Architecture
 
-`Local source reader → ingestion pipeline → Linux auth parser → normalized event → detection engine → alert → incident`
+`Event → ingestion → detection → alert → incident → investigation → evidence / timeline`
 
 Phase 2 adds a small ingestion boundary. The reader handles explicit local file
 input, while the pipeline passes lines to the existing source-specific parser and
 returns normalized events plus non-fatal diagnostics. Phase 3 derives incidents
-from related alerts without replacing the alert model. It does not add new log
-formats or duplicate parser logic.
+from related alerts without replacing the alert model. Phase 4 creates an
+investigation from one incident, preserving event-derived evidence and a
+chronological timeline. It does not add new log formats or duplicate parser logic.
 
 The normalized `SecurityEvent` includes a timezone-aware UTC timestamp, source, event type, optional username/source IP/hostname/process, message, and the untouched raw line. Missing source data remains `None`.
 
@@ -33,8 +34,11 @@ Only `sshd` and `sudo` are supported. The parser recognizes failed password, inv
 
 An alert is one detection result. An incident is a deterministic correlation of
 alerts that share explicit evidence context, such as the same username or source
-IP. Incidents begin `open` and support the forward transitions `investigating`,
-`resolved`, and `closed`; `open → resolved` is also allowed.
+IP. An investigation is the structured analytical context for exactly one
+incident. It preserves actual event-derived evidence and a chronological
+timeline; it does not establish compromise. Incidents begin `open` and support
+the forward transitions `investigating`, `resolved`, and `closed`; `open → resolved`
+is also allowed.
 
 Thresholds are represented by `RuleConfig`; `rules/auth_rules.yaml` is a human-readable reference. See [detection documentation](docs/detections.md).
 
@@ -46,6 +50,7 @@ Python 3.9+ is required. There are no runtime dependencies.
 python -m sentinelforge parse fixtures/auth.log
 python -m sentinelforge detect fixtures/auth.log
 python -m sentinelforge incident fixtures/auth.log
+python -m sentinelforge investigate fixtures/auth.log
 ```
 
 The CLI reads only the path explicitly supplied by the user and emits JSON. It uses the local ingestion reader and Linux auth parser, never executes log content, and never opens live system logs. An installed package also provides the `sentinelforge` command.

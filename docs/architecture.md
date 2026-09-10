@@ -1,9 +1,9 @@
 # Architecture
 
-SentinelForge's Phase 1 through Phase 3 foundation is an offline pipeline:
+SentinelForge's Phase 1 through Phase 4 foundation is an offline pipeline:
 
 ```text
-Event → Ingestion → Detection → Alert → Incident
+Event → Ingestion → Detection → Alert → Incident → Investigation → Evidence / Timeline
 ```
 
 1. The ingestion reader opens explicitly supplied local text files as untrusted input.
@@ -15,14 +15,24 @@ Event → Ingestion → Detection → Alert → Incident
 7. An `Alert` is one detection result. It contains a stable ID, severity, title, description, and evidence.
 8. `derive_incidents` groups alerts only when their evidence shares explicit context, such as a username or source IP.
 9. An `Incident` preserves related alert IDs and evidence, and starts with status `open`.
+10. `create_investigation` creates analytical context for exactly one incident.
+11. The investigation converts the incident's actual normalized events into immutable `Evidence` records and derives a chronological timeline.
 
-## Incident boundary
+## Investigation and evidence boundary
 
-Incident derivation is intentionally separate from detection. Detection rules continue
-to produce the existing alert objects, while the incident engine consumes those
-alerts and creates a higher-level correlated security situation. Incident IDs are
-deterministic for the same alert set and context. Alert groups and output ordering
-are deterministic.
+Investigation creation is separate from detection and incident correlation. An alert
+is a single detection result; an incident is a correlated security situation; an
+investigation is the structured context used to examine one incident; and evidence
+is actual event-derived information supporting that investigation.
+
+Evidence contains a deterministic ID, the normalized event reference, evidence type,
+source, timestamp, relevance, and provenance. Evidence cannot be created without a
+real `SecurityEvent`, and its timestamp and source must match that event. Duplicate
+evidence is removed during investigation creation. Timeline entries reference only
+known evidence IDs and are sorted by timestamp and evidence ID.
+
+Analyst notes are append-only from the model's perspective. They are inert caller-
+supplied text and are never executed or interpreted as code.
 
 Incident lifecycle transitions are explicit and forward-only:
 
@@ -31,7 +41,8 @@ open → investigating → resolved → closed
 open → resolved
 ```
 
-Invalid, backward, and reopening transitions are rejected. No incident persistence,
-case-management UI, automated response, or compromise claim is implemented.
+Investigation statuses are limited to `active` and `completed`. No investigation
+persistence, case-management UI, automated response, or compromise claim is
+implemented.
 
-Malformed and unsupported lines become diagnostics and do not stop other lines from being parsed. No command found in a log is executed, and the parser does not access live system logs.
+Malformed and unsupported lines become diagnostics and do not stop other lines from being parsed. No command found in a log or evidence is executed, and the parser does not access live system logs.
