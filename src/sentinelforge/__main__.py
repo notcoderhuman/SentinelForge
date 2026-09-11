@@ -15,6 +15,7 @@ from .investigation_engine import create_investigation
 from .observable_engine import extract_observables
 from .reporting import analyze_file, render_human_report
 from .threat_context_engine import load_context
+from .replay import evaluate, explain_alert, load_expected, replay_file
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -32,6 +33,11 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--incident", dest="incident_id")
     analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry", "windows_system_event"), default="linux_auth")
     analyze_parser.add_argument("--database", help="local SQLite database path")
+    replay_parser = subparsers.add_parser("replay")
+    replay_parser.add_argument("path")
+    replay_parser.add_argument("--source", choices=source_choices, default="linux_auth")
+    replay_parser.add_argument("--expected")
+    replay_parser.add_argument("--json", action="store_true")
     history_parser = subparsers.add_parser("history")
     history_parser.add_argument("--database", required=True, help="local SQLite database path")
     serve_parser = subparsers.add_parser("serve")
@@ -80,6 +86,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(render_human_report(report))
         return 0
+    if arguments.command == "replay":
+        try:
+            result = replay_file(arguments.path, arguments.source)
+            output = result.to_dict()
+            if arguments.expected:
+                evaluation = evaluate(result.alerts, load_expected(arguments.expected))
+                output["evaluation"] = evaluation.to_dict()
+                evaluation_failed = evaluation.false_positives > 0 or evaluation.false_negatives > 0
+            else:
+                evaluation_failed = False
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"replay error: {exc}") from exc
+        if arguments.json:
+            output["timing"].pop("elapsed_seconds", None)
+            print(json.dumps(output, indent=2, sort_keys=True))
+        else:
+            print(f"Events: {output['event_count']}")
+            print(f"Alerts: {output['alert_count']}")
+            if "evaluation" in output:
+                metrics = output["evaluation"]["metrics"]
+                print(f"Evaluation: precision={metrics['precision']:.3f} recall={metrics['recall']:.3f}")
+        return 1 if evaluation_failed else 0
     if arguments.command == "history":
         from .storage import AnalysisRepository, Database
         with Database(arguments.database) as db:

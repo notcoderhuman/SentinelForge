@@ -1,0 +1,8 @@
+{
+  "alerts": [
+    {"rule_id": "REGISTRY_KEY_DELETED", "severity": "medium", "count": 1},
+    {"rule_id": "REGISTRY_ACTIVITY_BY_MANY_PROCESSES", "severity": "medium", "count": 1},
+    {"rule_id": "REGISTRY_RUN_KEY_MODIFICATION", "severity": "medium", "count": 10},
+    {"rule_id": "REGISTRY_VALUE_MODIFIED", "severity": "medium", "count": 11}
+  ]
+}
