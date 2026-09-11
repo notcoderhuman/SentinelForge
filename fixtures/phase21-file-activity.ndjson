@@ -1,0 +1,11 @@
+{"timestamp":"2025-01-21T00:00:00Z","hostname":"file-host","username":"alice","path":"/var/tmp/cache.db","action":"modify","file_hash":"sha256-a","size":10}
+{"timestamp":"2025-01-21T00:00:30Z","hostname":"file-host","username":"alice","path":"/var/tmp/cache.db","action":"modify","file_hash":"sha256-b","size":11}
+{"timestamp":"2025-01-21T00:01:00Z","hostname":"file-host","username":"alice","path":"/var/tmp/cache.db","action":"modify","size":12}
+{"timestamp":"2025-01-21T00:01:30Z","hostname":"file-host","username":"alice","path":"/var/tmp/cache.db","action":"modify","size":13}
+{"timestamp":"2025-01-21T00:02:00Z","hostname":"file-host","username":"alice","path":"/var/tmp/cache.db","action":"modify","size":14}
+{"timestamp":"2025-01-21T00:10:00Z","hostname":"file-host","username":"alice","path":"/var/tmp/one.txt","action":"modify"}
+{"timestamp":"2025-01-21T00:10:10Z","hostname":"file-host","username":"alice","path":"/var/tmp/two.txt","action":"modify"}
+{"timestamp":"2025-01-21T00:10:20Z","hostname":"file-host","username":"alice","path":"/var/tmp/three.txt","action":"modify"}
+{"timestamp":"2025-01-21T00:10:30Z","hostname":"file-host","username":"alice","path":"/var/tmp/four.txt","action":"modify"}
+{"timestamp":"2025-01-21T00:10:40Z","hostname":"file-host","username":"alice","path":"/tmp/dropper.sh","action":"create","old_path":"/tmp/dropper.tmp","size":42}
+{"timestamp":"2025-01-21T00:10:50Z","hostname":"file-host","username":"alice","path":"/etc/shadow","action":"read","size":1}

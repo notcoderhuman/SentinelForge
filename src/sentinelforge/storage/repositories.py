@@ -35,7 +35,9 @@ def _event(data: Dict[str, Any]) -> SecurityEvent:
         executable_path=data.get("executable_path"), privilege=data.get("privilege"),
         direction=data.get("direction"), query=data.get("query"), query_type=data.get("query_type"),
         response_code=data.get("response_code"), resolved_ip=data.get("resolved_ip"),
-        query_name=data.get("query_name"), answers=list(data.get("answers", ())))
+        query_name=data.get("query_name"), answers=list(data.get("answers", ())),
+        path=data.get("path"), action=data.get("action"), file_hash=data.get("file_hash"),
+        old_path=data.get("old_path"), size=data.get("size"))
 
 def _evidence(data: Dict[str, Any]) -> Evidence:
     return Evidence(data["evidence_id"], _event(data["event"]), data["evidence_type"],

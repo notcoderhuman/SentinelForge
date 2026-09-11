@@ -72,6 +72,14 @@ class DetectionEngine:
             alerts.extend(self._parent_process_spawns_many_children(ordered_events))
         if self.registry.get("USER_EXECUTES_MANY_DISTINCT_PROCESSES").enabled:
             alerts.extend(self._user_runs_many_process_names(ordered_events))
+        if self.registry.get("REPEATED_FILE_ACTIVITY").enabled:
+            alerts.extend(self._repeated_file_activity(ordered_events))
+        if self.registry.get("HOST_MODIFIES_MANY_DISTINCT_FILES").enabled:
+            alerts.extend(self._host_modifies_many_files(ordered_events))
+        if self.registry.get("EXECUTABLE_FILE_CREATED").enabled and self.config.executable_file_created_enabled:
+            alerts.extend(self._executable_file_created(ordered_events))
+        if self.registry.get("FILE_ACTIVITY_ON_SENSITIVE_PATH").enabled and self.config.sensitive_file_path_enabled:
+            alerts.extend(self._sensitive_file_activity(ordered_events, threat_context))
         alerts.extend(self._event_correlations(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
@@ -501,6 +509,78 @@ class DetectionEngine:
                         rule_id, self.registry.get(rule_id).severity, title,
                         description.format(**values), matching,
                     ))
+                    break
+        return alerts
+
+    @staticmethod
+    def _file_events(events: Sequence[SecurityEvent]) -> List[SecurityEvent]:
+        return [event for event in events if event.event_type == "file_activity"]
+
+    def _repeated_file_activity(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, str, str], List[SecurityEvent]] = {}
+        for event in self._file_events(events):
+            if event.hostname and event.path and event.action:
+                grouped.setdefault((event.hostname, event.path, event.action), []).append(event)
+        return self._file_threshold_alerts(grouped, self.config.repeated_file_activity_threshold,
+                                           self.config.repeated_file_activity_window_seconds,
+                                           "REPEATED_FILE_ACTIVITY", "Repeated file activity observed.",
+                                           "Host {host} repeatedly performed action {action} on file {path} within the configured window.")
+
+    def _host_modifies_many_files(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, str], List[SecurityEvent]] = {}
+        for event in self._file_events(events):
+            if event.hostname and event.username and event.path and (event.action or "").lower() in {"create", "modify", "delete", "rename"}:
+                grouped.setdefault((event.hostname, event.username), []).append(event)
+        return self._file_distinct_alerts(grouped, self.config.host_many_distinct_files_threshold,
+                                           self.config.host_many_distinct_files_window_seconds,
+                                           "HOST_MODIFIES_MANY_DISTINCT_FILES",
+                                           "Host modified many distinct files.",
+                                           "Host {entity} modified distinct file paths within the configured window.")
+
+    def _executable_file_created(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        definition = self.registry.get("EXECUTABLE_FILE_CREATED")
+        extensions = {".exe", ".dll", ".sys", ".scr", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi", ".sh", ".so", ".dylib"}
+        directories = ("/bin/", "/sbin/", "/usr/bin/", "/usr/sbin/", "/usr/local/bin/", "/windows/system32/", "/windows/syswow64/")
+        alerts = []
+        for event in self._file_events(events):
+            path = event.path or ""
+            normalized = path.replace("\\", "/").lower()
+            name = normalized.rsplit("/", 1)[-1]
+            action = (event.action or "").strip().lower()
+            directory_match = any(normalized.startswith(directory) or ("/" + directory.strip("/") + "/") in normalized for directory in directories)
+            if action in {"create", "created"} and (any(name.endswith(ext) for ext in extensions) or directory_match):
+                alerts.append(create_alert(definition.rule_id, definition.severity, "Executable file created.", "A file activity event targeted a path commonly associated with executable content; this does not claim execution or malware.", [event]))
+        return alerts
+
+    def _sensitive_file_activity(self, events: Sequence[SecurityEvent], threat_context: Sequence[ThreatContext]) -> List[Alert]:
+        definition = self.registry.get("FILE_ACTIVITY_ON_SENSITIVE_PATH")
+        alerts = []
+        for event in self._file_events(events):
+            observables = [item for item in extract_observables([event]) if item.observable_type == "file_path" and item.provenance == "event.path"]
+            if any(context.context_type in {"suspicious", "known_malicious"} for context in match_context(observables, threat_context)):
+                alerts.append(create_alert(definition.rule_id, definition.severity, "File activity matched sensitive local context.", "File activity exactly matched a suspicious local file-path context; local context is not proof of malicious activity.", [event]))
+        return alerts
+
+    def _file_threshold_alerts(self, grouped, threshold, window_seconds, rule_id, title, description):
+        alerts = []
+        window = timedelta(seconds=window_seconds)
+        for entity, items in sorted(grouped.items(), key=lambda item: str(item[0])):
+            for end in range(threshold - 1, len(items)):
+                matching = items[end - threshold + 1:end + 1]
+                if matching[-1].timestamp - matching[0].timestamp <= window:
+                    alerts.append(create_alert(rule_id, self.registry.get(rule_id).severity, title, description.format(host=entity[0], path=entity[1], action=entity[2]), matching))
+                    break
+        return alerts
+
+    def _file_distinct_alerts(self, grouped, threshold, window_seconds, rule_id, title, description):
+        alerts = []
+        window = timedelta(seconds=window_seconds)
+        for entity, items in sorted(grouped.items()):
+            for end in range(threshold - 1, len(items)):
+                matching = items[end - threshold + 1:end + 1]
+                if matching[-1].timestamp - matching[0].timestamp <= window and len({event.path for event in matching}) >= threshold:
+                    label = entity if isinstance(entity, str) else f"{entity[0]} / {entity[1]}"
+                    alerts.append(create_alert(rule_id, self.registry.get(rule_id).severity, title, description.format(entity=label), matching))
                     break
         return alerts
 

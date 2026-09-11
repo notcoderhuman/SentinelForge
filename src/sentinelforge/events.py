@@ -46,6 +46,12 @@ class SecurityEvent:
     # DNS source compatibility fields (query_name/answers are source aliases).
     query_name: Optional[str] = None
     answers: list[str] = field(default_factory=list)
+    # File activity normalized attributes. Optional for backwards compatibility.
+    path: Optional[str] = None
+    action: Optional[str] = None
+    file_hash: Optional[str] = None
+    old_path: Optional[str] = None
+    size: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.timestamp.tzinfo is None:
@@ -59,8 +65,8 @@ class SecurityEvent:
         values["timestamp"] = self.timestamp.isoformat().replace("+00:00", "Z")
         if self.event_id is None:
             values.pop("event_id")
-        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "process_id", "parent_process_id", "command_line", "executable_path", "privilege", "direction", "query", "query_type", "response_code", "resolved_ip", "query_name"):
-            if values[field] is None:
+        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "process_id", "parent_process_id", "command_line", "executable_path", "privilege", "direction", "query", "query_type", "response_code", "resolved_ip", "query_name", "path", "action", "file_hash", "old_path", "size"):
+            if values[field] is None or (field in {"path", "action", "file_hash", "old_path"} and values[field] == ""):
                 values.pop(field)
         if not values["answers"]:
             values.pop("answers")

@@ -11,6 +11,7 @@ from ..parsers.network import parse_lines as parse_network_lines
 from ..parsers.dns import parse_lines as parse_dns_lines
 from ..parsers.process import parse_lines as parse_process_lines
 from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
+from ..parsers.file_activity import parse_lines as parse_file_activity_lines, parse_file as parse_file_activity_file
 from .reader import SourcePath, read_lines, read_sources
 
 
@@ -27,6 +28,8 @@ def parser_for_source(source: str) -> LineParser:
         return parse_network_lines
     if source == "process_execution":
         return parse_process_lines
+    if source in {"file_activity", "file"}:
+        return parse_file_activity_lines
     if source in {"dns_query", "dns"}:
         return parse_dns_lines
     if source == "network":
@@ -52,6 +55,9 @@ def ingest_file(source_path: SourcePath, parser: LineParser = parse_lines, sourc
     """Read one local source and pass its lines to the selected parser."""
     if source == "windows_security":
         events, diagnostics = parse_windows_file(source_path)
+        return IngestionResult(events=events, diagnostics=diagnostics)
+    if source in {"file_activity", "file"} and parser is parse_lines:
+        events, diagnostics = parse_file_activity_file(source_path)
         return IngestionResult(events=events, diagnostics=diagnostics)
     if parser is parse_lines and source != "linux_auth":
         parser = parser_for_source(source)

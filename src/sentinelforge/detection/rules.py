@@ -35,8 +35,6 @@ class RuleConfig:
     repeated_dns_query_window_seconds: int = 120
     dns_many_queries_threshold: int = 5
     dns_many_queries_window_seconds: int = 120
-    dns_many_domains_threshold: int | None = None
-    dns_many_domains_window_seconds: int | None = None
     dns_many_hostnames_threshold: int = 5
     dns_many_hostnames_window_seconds: int = 120
     dns_many_domains_threshold: int = 5
@@ -45,3 +43,10 @@ class RuleConfig:
     process_parent_child_threshold: int | None = None
     user_process_threshold: int | None = None
     sudo_enabled: bool = True
+    # Phase 21 file activity detections.
+    repeated_file_activity_threshold: int = 5
+    repeated_file_activity_window_seconds: int = 120
+    host_many_distinct_files_threshold: int = 5
+    host_many_distinct_files_window_seconds: int = 120
+    executable_file_created_enabled: bool = True
+    sensitive_file_path_enabled: bool = True

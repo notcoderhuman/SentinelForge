@@ -37,6 +37,8 @@ def extract_observables(events: Iterable[SecurityEvent]) -> List[Observable]:
                     _add_observable(extracted, event, address_type, str(address), provenance)
         if event.username:
             _add_observable(extracted, event, "username", event.username, "event.username")
+        if event.event_type == "file_activity" and event.path:
+            _add_observable(extracted, event, "file_path", event.path, "event.path")
         query = getattr(event, "query", None)
         if query:
             _add_observable(extracted, event, "domain", query.strip().lower().rstrip("."), "event.query")

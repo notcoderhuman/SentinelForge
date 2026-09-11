@@ -2,7 +2,7 @@
 
 SentinelForge is a small, deterministic security-monitoring and detection-engineering lab for Linux authentication events. It demonstrates collection from an offline fixture, normalization, evidence-preserving parsing, rule evaluation, and structured alerts.
 
-It is **not** an enterprise SIEM, production SOC platform, or autonomous security system. Phase 1 deliberately has no dashboard, database, network sensor, cloud integration, AI, or automated response. Phase 20 adds focused DNS telemetry coverage while keeping parsing offline, deterministic, and evidence-preserving.
+It is **not** an enterprise SIEM, production SOC platform, or autonomous security system. Phase 1 deliberately has no dashboard, database, network sensor, cloud integration, AI, or automated response. Phase 20 adds focused DNS telemetry coverage, and Phase 21 adds file-activity telemetry coverage, while keeping parsing offline, deterministic, and evidence-preserving.
 
 ## Architecture
 
@@ -36,6 +36,8 @@ Only `sshd` and `sudo` are supported by the Linux parser. A controlled Windows S
 - `WINDOWS_PRIVILEGED_LOGON`: Windows Event ID 4672 observed with an explicit user (low).
 
 Phase 20 DNS telemetry is newline-delimited JSON selected explicitly with `--source dns_query` (the `dns` alias is also accepted). Its four bounded observations are `DNS_QUERY_TO_SUSPICIOUS_DOMAIN`, `REPEATED_DNS_QUERY`, `SOURCE_QUERIES_MANY_DOMAINS`, and `DOMAIN_QUERIED_BY_MANY_SOURCES`. DNS query names use exact local threat-context matches; missing identities remain missing, malformed records become diagnostics, and no DNS event is treated as network connection activity.
+
+Phase 21 file activity telemetry is newline-delimited JSON selected with `--source file_activity` (the parser also accepts the `file` alias). Required fields are timestamp, hostname, path, action, and username; optional hash, old path, and non-negative size values are validated and preserved. The four conservative observations are `REPEATED_FILE_ACTIVITY`, `HOST_MODIFIES_MANY_DISTINCT_FILES`, `EXECUTABLE_FILE_CREATED`, and `FILE_ACTIVITY_ON_SENSITIVE_PATH`. File paths use exact local `file_path` context matching, action is required for executable creation, missing identities never create grouping matches, and file records are never executed or treated as process/network/DNS telemetry.
 
 An alert is one detection result. Correlation findings identify supported
 multi-event evidence patterns, and risk assessment provides deterministic

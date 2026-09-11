@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
-ALLOWED_OBSERVABLE_TYPES = frozenset({"ipv4", "ipv6", "domain", "url", "username"})
+ALLOWED_OBSERVABLE_TYPES = frozenset({"ipv4", "ipv6", "domain", "url", "username", "file_path"})
 
 
 @dataclass(frozen=True)
