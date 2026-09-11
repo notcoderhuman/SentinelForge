@@ -111,6 +111,8 @@ class Investigation:
             "evidence": [item.to_dict() for item in self.evidence],
             "timeline": [entry.to_dict() for entry in self.timeline],
             "analyst_notes": [note.to_dict() for note in self.analyst_notes],
+            # Retain rule provenance independently of derived ATT&CK output.
+            "source_rule_ids": list(self.source_rule_ids),
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
             "correlations": [finding.to_dict() for finding in self.correlations],
             "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,

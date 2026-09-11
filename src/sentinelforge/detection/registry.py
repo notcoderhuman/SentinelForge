@@ -134,4 +134,32 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
         "medium", 120, True,
         ("five distinct process names for one user on one host within 120 seconds",),
     ),
+    RuleDefinition(
+        "AUTHENTICATION_TO_NETWORK_ACTIVITY",
+        "Authentication to network activity",
+        "A successful authentication is followed by network activity for the same explicit user and host.",
+        "medium", 300, True,
+        ("authentication_success followed by network activity within 300 seconds",),
+    ),
+    RuleDefinition(
+        "NETWORK_TO_PROCESS_ACTIVITY",
+        "Network to process activity",
+        "Network activity is followed by process execution for the same explicit host.",
+        "medium", 300, True,
+        ("network activity followed by process_execution within 300 seconds",),
+    ),
+    RuleDefinition(
+        "AUTHENTICATION_TO_PROCESS_ACTIVITY",
+        "Authentication to process activity",
+        "A successful authentication is followed by process execution for the same explicit user and host.",
+        "medium", 300, True,
+        ("authentication_success followed by process_execution within 300 seconds",),
+    ),
+    RuleDefinition(
+        "AUTH_NETWORK_PROCESS_CHAIN",
+        "Authentication network process chain",
+        "Authentication, network activity, and process execution form a bounded explicit-identity chain.",
+        "high", 300, True,
+        ("authentication_success, network activity, and process_execution within 300 seconds",),
+    ),
 ))

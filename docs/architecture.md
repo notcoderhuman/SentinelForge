@@ -64,6 +64,23 @@ persistence, lateral movement, exploitation, LOLBin, or command-and-control
 claims. The source performs no subprocess execution, network access, or
 external enrichment.
 
+## Phase 19 cross-source correlation boundary
+
+Cross-source correlation is an additive deterministic stage over normalized
+authentication, `network_connection`, and `process_execution` events. It emits
+existing `Alert` objects for authentication-to-network, network-to-process,
+authentication-to-process, and complete authentication-network-process chains.
+Each relationship uses an inclusive 300-second window and requires chronological
+ordering. Usernames match only when both sides provide equal usernames;
+hostnames match only when both sides provide equal hostnames. Missing identity
+values are never treated as matches, and network ownership is never inferred
+from process IDs or names. Alerts preserve the original participating events,
+flow through existing incidents, investigations, evidence, risk, persistence,
+and API output, and make no claim of compromise. IDs and evidence ordering are
+stable under input reordering; duplicate relationships are suppressed. No
+AI/LLM processing, network enrichment, subprocess execution, or external
+service is involved.
+
 ## Local HTTP API boundary
 
 Phase 14 adds a standard-library `http.server` interface in `sentinelforge.api`.

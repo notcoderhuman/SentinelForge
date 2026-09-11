@@ -109,6 +109,10 @@ class Incident:
             "affected_users": list(self.affected_users),
             "affected_entities": list(self.affected_entities),
             "evidence": [event.to_dict() for event in self.evidence],
+            # Persist the rule provenance used to derive ATT&CK mappings.  The
+            # mappings are a presentation view; retaining source IDs makes a
+            # round trip lossless when rules evolve or are unavailable.
+            "source_rule_ids": list(self.source_rule_ids),
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
             "correlations": [finding.to_dict() for finding in self.correlations],
             "risk_assessment": self.risk_assessment.to_dict() if self.risk_assessment else None,

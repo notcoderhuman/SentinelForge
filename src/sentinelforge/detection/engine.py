@@ -64,6 +64,7 @@ class DetectionEngine:
             alerts.extend(self._parent_process_spawns_many_children(ordered_events))
         if self.registry.get("USER_EXECUTES_MANY_DISTINCT_PROCESSES").enabled:
             alerts.extend(self._user_runs_many_process_names(ordered_events))
+        alerts.extend(self._event_correlations(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
@@ -404,6 +405,83 @@ class DetectionEngine:
                     ))
                     break
         return alerts
+
+    def _event_correlations(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        """Emit deterministic, evidence-linked cross-source relationships."""
+        window = timedelta(seconds=300)
+        auth = [event for event in events
+                if event.event_type == "authentication_success"]
+        network = [event for event in events
+                   if event.event_type == "network_connection"]
+        processes = [event for event in events
+                     if event.event_type == "process_execution"]
+        alerts: List[Alert] = []
+
+        def emit(rule_id: str, evidence: Sequence[SecurityEvent], description: str) -> None:
+            try:
+                definition = self.registry.get(rule_id)
+            except KeyError:
+                return
+            if not definition.enabled:
+                return
+            ordered = sorted(evidence, key=lambda event: (event.timestamp, event.raw))
+            alerts.append(create_alert(
+                rule_id, definition.severity, definition.name + " observed.",
+                description, ordered,
+            ))
+
+        def auth_identity_matches(left: SecurityEvent, right: SecurityEvent) -> bool:
+            return (bool(left.username and right.username and left.hostname and right.hostname)
+                    and left.username == right.username
+                    and left.hostname == right.hostname)
+
+        def host_matches(left: SecurityEvent, right: SecurityEvent) -> bool:
+            return bool(left.hostname and right.hostname and left.hostname == right.hostname)
+
+        def within(start: SecurityEvent, end: SecurityEvent) -> bool:
+            delta = end.timestamp - start.timestamp
+            return timedelta(0) <= delta <= window
+
+        for success in auth:
+            for network_event in network:
+                if within(success, network_event) and auth_identity_matches(success, network_event):
+                    emit(
+                        "AUTHENTICATION_TO_NETWORK_ACTIVITY", (success, network_event),
+                        "A successful authentication was followed by network activity for the same explicit user and host.",
+                    )
+
+        for success in auth:
+            for process_event in processes:
+                if within(success, process_event) and auth_identity_matches(success, process_event):
+                    emit(
+                        "AUTHENTICATION_TO_PROCESS_ACTIVITY", (success, process_event),
+                        "A successful authentication was followed by process execution for the same explicit user and host.",
+                    )
+
+        for network_event in network:
+            for process_event in processes:
+                if within(network_event, process_event) and host_matches(network_event, process_event):
+                    emit(
+                        "NETWORK_TO_PROCESS_ACTIVITY", (network_event, process_event),
+                        "Network activity was followed by process execution on the same explicit host; no ownership is inferred.",
+                    )
+
+        for success in auth:
+            for network_event in network:
+                for process_event in processes:
+                    if (within(success, network_event)
+                            and within(network_event, process_event)
+                            and process_event.timestamp - success.timestamp <= window
+                            and auth_identity_matches(success, process_event)
+                            and auth_identity_matches(success, network_event)
+                            and host_matches(network_event, process_event)):
+                        emit(
+                            "AUTH_NETWORK_PROCESS_CHAIN", (success, network_event, process_event),
+                            "Authentication, network activity, and process execution formed an explicit identity chain.",
+                        )
+
+        unique = {alert.alert_id: alert for alert in alerts}
+        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     def _distinct_entity_alerts(self, grouped_events: Dict[str, List[SecurityEvent]], threshold: int,
                                 window_seconds: int, rule_id: str, title: str, description: str,

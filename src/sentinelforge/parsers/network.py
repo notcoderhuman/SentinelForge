@@ -18,7 +18,7 @@ _REQUIRED = (
     "destination_port",
     "protocol",
 )
-_OPTIONAL = ("process_name", "username", "direction")
+_OPTIONAL = ("process_name", "username", "hostname", "direction")
 
 
 def _timestamp(value: object) -> datetime:
@@ -80,12 +80,13 @@ def parse_line(raw_line: str, line_number: int = 1) -> Tuple[Optional[SecurityEv
 
     process_name = record.get("process_name")
     username = record.get("username")
+    hostname = record.get("hostname")
     direction = record.get("direction")
     return SecurityEvent(
         timestamp=timestamp,
         source="network_connection",
         event_type="network_connection",
-        hostname=None,
+        hostname=hostname,
         process=process_name,
         username=username,
         source_ip=source_ip,

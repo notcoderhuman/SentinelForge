@@ -11,6 +11,7 @@ from .events import SecurityEvent
 
 AUTH_SEQUENCE_WINDOW_SECONDS = 300
 PRIVILEGED_SEQUENCE_WINDOW_SECONDS = 300
+EVENT_SEQUENCE_WINDOW_SECONDS = 300
 
 
 def _events(alert: Alert, event_type: str) -> List[SecurityEvent]:
@@ -60,6 +61,29 @@ def correlate_alerts(alerts: Sequence[Alert]) -> List[CorrelationFinding]:
                 involved_alerts, evidence_ids, success.timestamp, sudo_event.timestamp,
                 "Successful authentication was followed by sudo activity for the same account within 300 seconds; this is not proof of misuse.",
             ))
+
+    # DetectionEngine owns relationship matching. Here we only materialize
+    # findings from the concrete correlation alerts it emitted.
+    descriptions = {
+        "AUTHENTICATION_TO_NETWORK_ACTIVITY": "Authentication followed by network activity observed.",
+        "AUTHENTICATION_TO_PROCESS_ACTIVITY": "Authentication followed by process activity observed.",
+        "NETWORK_TO_PROCESS_ACTIVITY": "Network activity followed by process activity observed.",
+        "AUTH_NETWORK_PROCESS_CHAIN": "Authentication, network, and process chain observed.",
+    }
+    rationales = {
+        rule_id: "The DetectionEngine observed the explicit chronological relationship within 300 seconds; this is not proof of compromise."
+        for rule_id in descriptions
+    }
+    for alert in ordered_alerts:
+        if alert.rule_id not in descriptions:
+            continue
+        evidence = tuple(sorted(alert.evidence, key=lambda event: (event.timestamp, event.raw)))
+        findings.append(create_finding(
+            alert.rule_id, descriptions[alert.rule_id], (alert.alert_id,),
+            tuple(event_evidence_id(event.raw) for event in evidence),
+            evidence[0].timestamp, evidence[-1].timestamp,
+            rationales[alert.rule_id],
+        ))
 
     unique_findings = {finding.correlation_id: finding for finding in findings}
     return sorted(unique_findings.values(), key=lambda finding: finding.correlation_id)
