@@ -49,6 +49,14 @@ class DetectionEngine:
             alerts.extend(self._source_contacts_many_destinations(ordered_events))
         if self.registry.get("DESTINATION_CONTACTED_BY_MANY_SOURCES").enabled:
             alerts.extend(self._destination_contacted_by_many_sources(ordered_events))
+        if self.registry.get("REPEATED_DNS_QUERY").enabled:
+            alerts.extend(self._dns_repeated_hostname_query(ordered_events))
+        if self.registry.get("SOURCE_QUERIES_MANY_DOMAINS").enabled:
+            alerts.extend(self._dns_hostname_many_queries(ordered_events))
+        if self.registry.get("DNS_QUERY_TO_SUSPICIOUS_DOMAIN").enabled:
+            alerts.extend(self._dns_suspicious_domain(ordered_events, threat_context))
+        if self.registry.get("DOMAIN_QUERIED_BY_MANY_SOURCES").enabled:
+            alerts.extend(self._dns_query_many_hostnames(ordered_events))
         alerts.extend(self._ssh_brute_force(ordered_events))
         alerts.extend(self._repeated_failures(ordered_events))
         alerts.extend(self._success_after_failures(ordered_events))
@@ -66,6 +74,96 @@ class DetectionEngine:
             alerts.extend(self._user_runs_many_process_names(ordered_events))
         alerts.extend(self._event_correlations(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+
+    @staticmethod
+    def _dns_events(events: Sequence[SecurityEvent]) -> List[SecurityEvent]:
+        return [event for event in events if event.event_type == "dns_query"]
+
+    @staticmethod
+    def _dns_query(event: SecurityEvent) -> str | None:
+        query = getattr(event, "query", None)
+        return query.strip().lower().rstrip(".") if isinstance(query, str) and query.strip() else None
+
+    def _dns_repeated_hostname_query(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, str], List[SecurityEvent]] = {}
+        for event in self._dns_events(events):
+            query = self._dns_query(event)
+            if event.hostname and query:
+                grouped.setdefault((event.hostname, query), []).append(event)
+        return self._dns_threshold_alerts(grouped, self.config.repeated_dns_query_threshold,
+                                          self.config.repeated_dns_query_window_seconds,
+                                          "REPEATED_DNS_QUERY",
+                                          "Repeated DNS query observed.",
+                                          "Hostname {hostname} repeatedly queried {query} within the configured window.")
+
+    def _dns_hostname_many_queries(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[str, List[SecurityEvent]] = {}
+        for event in self._dns_events(events):
+            query = self._dns_query(event)
+            if event.hostname and query:
+                grouped.setdefault(event.hostname, []).append(event)
+        return self._dns_distinct_alerts(grouped, self.config.dns_many_domains_threshold or self.config.dns_many_queries_threshold,
+                                         self.config.dns_many_domains_window_seconds or self.config.dns_many_queries_window_seconds,
+                                         "SOURCE_QUERIES_MANY_DOMAINS",
+                                         "Hostname queried many distinct DNS names.",
+                                         "Hostname {entity} queried distinct DNS names within the configured window.",
+                                         self._dns_query)
+
+    def _dns_suspicious_domain(self, events: Sequence[SecurityEvent], threat_context: Sequence[ThreatContext]) -> List[Alert]:
+        definition = self.registry.get("DNS_QUERY_TO_SUSPICIOUS_DOMAIN")
+        alerts = []
+        for event in self._dns_events(events):
+            # Match only the normalized query observable.  Domains mentioned in
+            # the free-form message are deliberately not eligible for this rule.
+            query_observables = [observable for observable in extract_observables([event])
+                                 if observable.observable_type == "domain"
+                                 and observable.provenance == "event.query"]
+            contexts = match_context(query_observables, threat_context)
+            context = next((item for item in contexts
+                            if item.context_type in {"suspicious", "known_malicious"}), None)
+            query = self._dns_query(event)
+            if context is not None and query:
+                alerts.append(create_alert(definition.rule_id, definition.severity,
+                    "DNS query matched suspicious local domain context.",
+                    f"DNS query for {query} exactly matched suspicious local context; local context is not proof of malicious activity.", [event]))
+        return alerts
+
+    def _dns_query_many_hostnames(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[str, List[SecurityEvent]] = {}
+        for event in self._dns_events(events):
+            query = self._dns_query(event)
+            if event.hostname and query:
+                grouped.setdefault(query, []).append(event)
+        return self._dns_distinct_alerts(grouped, self.config.dns_many_hostnames_threshold,
+                                         self.config.dns_many_hostnames_window_seconds,
+                                         "DOMAIN_QUERIED_BY_MANY_SOURCES",
+                                         "DNS query observed from many hostnames.",
+                                         "DNS query {entity} was observed from distinct hostnames within the configured window.",
+                                         lambda event: event.hostname)
+
+    def _dns_threshold_alerts(self, grouped, threshold, window_seconds, rule_id, title, description):
+        alerts = []
+        window = timedelta(seconds=window_seconds)
+        for entity, items in sorted(grouped.items(), key=lambda item: str(item[0])):
+            for end in range(threshold - 1, len(items)):
+                matching = items[end - threshold + 1:end + 1]
+                if matching[-1].timestamp - matching[0].timestamp <= window:
+                    alerts.append(create_alert(rule_id, self.registry.get(rule_id).severity, title,
+                        description.format(hostname=entity[0], query=entity[1]), matching))
+                    break
+        return alerts
+
+    def _dns_distinct_alerts(self, grouped, threshold, window_seconds, rule_id, title, description, key):
+        alerts = []
+        window = timedelta(seconds=window_seconds)
+        for entity, items in sorted(grouped.items(), key=lambda item: str(item[0])):
+            for end in range(threshold - 1, len(items)):
+                matching = items[end - threshold + 1:end + 1]
+                if matching[-1].timestamp - matching[0].timestamp <= window and len({key(event) for event in matching}) >= threshold:
+                    alerts.append(create_alert(rule_id, self.registry.get(rule_id).severity, title,
+                        description.format(entity=entity), matching))
+                    break
+        return alerts
 
     @staticmethod
     def _failures(events: Sequence[SecurityEvent]) -> List[SecurityEvent]:

@@ -37,7 +37,7 @@ class ThreadSafeAuthServer(SentinelHTTPServer):
 
 class ApiTests(unittest.TestCase):
     def test_source_allowlist_is_explicit_and_network_enabled(self):
-        self.assertEqual(ALLOWED_SOURCES, frozenset({"linux_auth", "windows_security", "network_connection", "process_execution"}))
+        self.assertEqual(ALLOWED_SOURCES, frozenset({"linux_auth", "windows_security", "network_connection", "process_execution", "dns_query"}))
 
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()

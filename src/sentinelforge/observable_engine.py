@@ -37,6 +37,9 @@ def extract_observables(events: Iterable[SecurityEvent]) -> List[Observable]:
                     _add_observable(extracted, event, address_type, str(address), provenance)
         if event.username:
             _add_observable(extracted, event, "username", event.username, "event.username")
+        query = getattr(event, "query", None)
+        if query:
+            _add_observable(extracted, event, "domain", query.strip().lower().rstrip("."), "event.query")
         for match in URL_PATTERN.finditer(event.message):
             _add_observable(extracted, event, "url", match.group(0).rstrip(".,"), "event.message")
         message_without_urls = URL_PATTERN.sub("", event.message)

@@ -8,6 +8,7 @@ from typing import Callable, Iterable, List, Sequence, Tuple
 from ..events import SecurityEvent
 from ..parsers.linux_auth import ParseDiagnostic, parse_lines
 from ..parsers.network import parse_lines as parse_network_lines
+from ..parsers.dns import parse_lines as parse_dns_lines
 from ..parsers.process import parse_lines as parse_process_lines
 from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
 from .reader import SourcePath, read_lines, read_sources
@@ -26,6 +27,8 @@ def parser_for_source(source: str) -> LineParser:
         return parse_network_lines
     if source == "process_execution":
         return parse_process_lines
+    if source in {"dns_query", "dns"}:
+        return parse_dns_lines
     if source == "network":
         return parse_network_lines
     raise ValueError(f"unsupported source: {source}")

@@ -81,6 +81,10 @@ stable under input reordering; duplicate relationships are suppressed. No
 AI/LLM processing, network enrichment, subprocess execution, or external
 service is involved.
 
+## Phase 20 DNS telemetry boundary
+
+The `dns_query` source accepts newline-delimited JSON records with required `timestamp`, `hostname`, `query`, and `query_type` fields. The optional `response_code`, `source_ip`, `source_port`, `answers`, username, and direction fields are validated when present; the first valid address in `answers` may populate `resolved_ip` while all answers remain evidence. DNS query identity is required for detection, and hostname is required for source-based grouping. The source is selected explicitly with `--source dns_query`. Valid records become normalized DNS events with their exact raw JSON retained; malformed or incomplete records become non-fatal diagnostics. DNS detections are four bounded, deterministic observations: exact local-context matches for suspicious domains, repeated queries, one source querying many distinct domains, and one domain queried by many distinct sources. The relationship window is inclusive at 120 seconds and excludes 121 seconds. Missing identities never create matches, reversed input produces stable IDs and evidence ordering, and DNS events do not enter network-connection correlation. No resolver, reputation lookup, network access, or command execution is performed.
+
 ## Local HTTP API boundary
 
 Phase 14 adds a standard-library `http.server` interface in `sentinelforge.api`.

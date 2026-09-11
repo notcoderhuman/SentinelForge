@@ -2,7 +2,7 @@
 
 SentinelForge is a small, deterministic security-monitoring and detection-engineering lab for Linux authentication events. It demonstrates collection from an offline fixture, normalization, evidence-preserving parsing, rule evaluation, and structured alerts.
 
-It is **not** an enterprise SIEM, production SOC platform, or autonomous security system. Phase 1 deliberately has no dashboard, database, network sensor, cloud integration, AI, or automated response.
+It is **not** an enterprise SIEM, production SOC platform, or autonomous security system. Phase 1 deliberately has no dashboard, database, network sensor, cloud integration, AI, or automated response. Phase 20 adds focused DNS telemetry coverage while keeping parsing offline, deterministic, and evidence-preserving.
 
 ## Architecture
 
@@ -34,6 +34,8 @@ Only `sshd` and `sudo` are supported by the Linux parser. A controlled Windows S
 - `SOURCE_TARGETS_MULTIPLE_ACCOUNTS`: three distinct accounts targeted by one source IP within 120 seconds (medium).
 - `ACCOUNT_TARGETED_BY_MULTIPLE_SOURCES`: one account targeted by three distinct source IPs within 120 seconds (medium).
 - `WINDOWS_PRIVILEGED_LOGON`: Windows Event ID 4672 observed with an explicit user (low).
+
+Phase 20 DNS telemetry is newline-delimited JSON selected explicitly with `--source dns_query` (the `dns` alias is also accepted). Its four bounded observations are `DNS_QUERY_TO_SUSPICIOUS_DOMAIN`, `REPEATED_DNS_QUERY`, `SOURCE_QUERIES_MANY_DOMAINS`, and `DOMAIN_QUERIED_BY_MANY_SOURCES`. DNS query names use exact local threat-context matches; missing identities remain missing, malformed records become diagnostics, and no DNS event is treated as network connection activity.
 
 An alert is one detection result. Correlation findings identify supported
 multi-event evidence patterns, and risk assessment provides deterministic
@@ -67,6 +69,7 @@ python -m sentinelforge analyze fixtures/windows-security.xml --source windows_s
 python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security --json
 python -m sentinelforge analyze fixtures/network-phase17.ndjson --source network_connection --json
 python -m sentinelforge analyze fixtures/process-phase18.ndjson --source process_execution --json
+python -m sentinelforge analyze fixtures/dns-phase20.ndjson --source dns_query --json
 python -m sentinelforge analyze fixtures/auth.log --database data/sentinelforge.db
 python -m sentinelforge history --database data/sentinelforge.db
 python -m sentinelforge serve --host 127.0.0.1 --port 8765 --database data/sentinelforge.db

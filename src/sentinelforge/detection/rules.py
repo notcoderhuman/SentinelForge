@@ -30,6 +30,17 @@ class RuleConfig:
     parent_process_children_window_seconds: int = 120
     user_process_names_threshold: int = 5
     user_process_names_window_seconds: int = 120
+    # Phase 20 DNS telemetry detections.
+    repeated_dns_query_threshold: int = 5
+    repeated_dns_query_window_seconds: int = 120
+    dns_many_queries_threshold: int = 5
+    dns_many_queries_window_seconds: int = 120
+    dns_many_domains_threshold: int | None = None
+    dns_many_domains_window_seconds: int | None = None
+    dns_many_hostnames_threshold: int = 5
+    dns_many_hostnames_window_seconds: int = 120
+    dns_many_domains_threshold: int = 5
+    dns_many_domains_window_seconds: int = 120
     # Compatibility aliases used by early Phase 18 callers.
     process_parent_child_threshold: int | None = None
     user_process_threshold: int | None = None
