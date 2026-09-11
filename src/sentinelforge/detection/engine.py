@@ -81,7 +81,9 @@ class DetectionEngine:
         if self.registry.get("FILE_ACTIVITY_ON_SENSITIVE_PATH").enabled and self.config.sensitive_file_path_enabled:
             alerts.extend(self._sensitive_file_activity(ordered_events, threat_context))
         alerts.extend(self._event_correlations(ordered_events))
-        return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+        alerts.extend(self._persistence_detections(ordered_events))
+        unique = {alert.alert_id: alert for alert in alerts}
+        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
     def _dns_events(events: Sequence[SecurityEvent]) -> List[SecurityEvent]:
@@ -658,6 +660,43 @@ class DetectionEngine:
                             "Authentication, network activity, and process execution formed an explicit identity chain.",
                         )
 
+        unique = {alert.alert_id: alert for alert in alerts}
+        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+
+    def _persistence_detections(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        """Detect only explicit system-persistence records and relationships."""
+        alerts: List[Alert] = []
+        actions = {"create", "created", "update", "updated"}
+        starts = {"start", "started", "running"}
+        persistence = [event for event in events if event.event_type in {"persistence", "system_persistence"}]
+        def emit(rule_id: str, evidence: Sequence[SecurityEvent], text: str) -> None:
+            definition = self.registry.get(rule_id)
+            if definition.enabled:
+                ordered = sorted(evidence, key=lambda event: (event.timestamp, event.raw))
+                alerts.append(create_alert(rule_id, definition.severity, definition.name + " observed.", text, ordered))
+        for event in persistence:
+            action = (event.persistence_action or "").strip().lower()
+            kind = (event.persistence_type or "").strip().lower()
+            if kind == "service" and action in actions:
+                emit("SERVICE_CREATED_OR_UPDATED", [event], "A service create or update was observed.")
+            if kind in {"scheduled_task", "cron"} and action in actions:
+                emit("SCHEDULED_TASK_CREATED_OR_UPDATED", [event], "A scheduled-task or cron create or update was observed.")
+                if event.command and event.command.strip():
+                    emit("SCHEDULED_TASK_CREATED_WITH_COMMAND", [event], "A scheduled-task or cron create or update included an explicit command.")
+        window = timedelta(seconds=self.config.persistence_correlation_window_seconds)
+        for created in persistence:
+            if (created.persistence_type or "").lower() != "service" or (created.persistence_action or "").lower() not in actions:
+                continue
+            if not created.hostname or not created.username or not created.persistence_name:
+                continue
+            for started in persistence:
+                if ((started.persistence_type or "").lower() == "service"
+                    and (started.persistence_action or "").lower() in starts
+                    and started.hostname == created.hostname
+                    and started.username == created.username
+                    and started.persistence_name == created.persistence_name
+                    and timedelta(0) <= started.timestamp - created.timestamp <= window):
+                    emit("SERVICE_STARTED_AFTER_CREATION", [created, started], f"A service was started within {self.config.persistence_correlation_window_seconds} seconds of creation or update for the same explicit host, service, and user.")
         unique = {alert.alert_id: alert for alert in alerts}
         return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 

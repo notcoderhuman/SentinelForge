@@ -38,6 +38,13 @@ class SecurityEvent:
     executable_path: Optional[str] = None
     privilege: Optional[str] = None
     direction: Optional[str] = None
+    # System persistence normalized attributes. Optional for backwards compatibility.
+    persistence_type: Optional[str] = None
+    persistence_action: Optional[str] = None
+    persistence_name: Optional[str] = None
+    command: Optional[str] = None
+    service_manager: Optional[str] = None
+    task_path: Optional[str] = None
     # DNS-specific normalized attributes. Optional for backwards compatibility.
     query: Optional[str] = None
     query_type: Optional[str] = None
@@ -65,8 +72,8 @@ class SecurityEvent:
         values["timestamp"] = self.timestamp.isoformat().replace("+00:00", "Z")
         if self.event_id is None:
             values.pop("event_id")
-        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "process_id", "parent_process_id", "command_line", "executable_path", "privilege", "direction", "query", "query_type", "response_code", "resolved_ip", "query_name", "path", "action", "file_hash", "old_path", "size"):
-            if values[field] is None or (field in {"path", "action", "file_hash", "old_path"} and values[field] == ""):
+        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "process_id", "parent_process_id", "command_line", "executable_path", "privilege", "direction", "persistence_type", "persistence_action", "persistence_name", "command", "service_manager", "task_path", "query", "query_type", "response_code", "resolved_ip", "query_name", "path", "action", "file_hash", "old_path", "size"):
+            if values[field] is None or (field in {"path", "action", "file_hash", "old_path", "persistence_type", "persistence_action", "persistence_name", "command", "service_manager", "task_path"} and values[field] == ""):
                 values.pop(field)
         if not values["answers"]:
             values.pop("answers")

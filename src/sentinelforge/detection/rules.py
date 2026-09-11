@@ -50,3 +50,5 @@ class RuleConfig:
     host_many_distinct_files_window_seconds: int = 120
     executable_file_created_enabled: bool = True
     sensitive_file_path_enabled: bool = True
+    # Phase 22 system-persistence detections.
+    persistence_correlation_window_seconds: int = 300

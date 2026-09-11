@@ -1,0 +1,11 @@
+{"timestamp":"2025-01-22T00:00:00Z","hostname":"persist-host","username":"alice","persistence_type":"service","action":"create","name":"Updater","command":"/usr/local/bin/updater --run","service_manager":"systemd","executable_path":"/usr/local/bin/updater","privilege":"root","process_id":1001}
+{"timestamp":"2025-01-22T00:00:10Z","hostname":"persist-host","username":"alice","persistence_type":"scheduled_task","action":"create","name":"DailySync","command":"/opt/sync --daily","task_path":"\\Tasks\\DailySync"}
+{"timestamp":"2025-01-22T00:00:20Z","hostname":"persist-host","username":"alice","persistence_type":"cron","action":"create","name":"NightlyJob","command":"/usr/local/bin/nightly","service_manager":"cron"}
+{"timestamp":"2025-01-22T00:00:30Z","hostname":"persist-host","username":"bob","persistence_type":"service","action":"modify","name":"Updater","command":"/usr/local/bin/updater --safe","service_manager":"systemd"}
+{"timestamp":"2025-01-22T00:00:40Z","hostname":"persist-host","username":"bob","persistence_type":"scheduled_task","action":"delete","name":"OldTask","task_path":"\\Tasks\\OldTask"}
+{"timestamp":"2025-01-22T00:00:50Z","hostname":"persist-host","username":"carol","persistence_type":"service","action":"create","name":"Agent","command":"/usr/sbin/agent","service_manager":"systemd"}
+{"timestamp":"2025-01-22T00:01:00Z","hostname":"persist-host","username":"carol","persistence_type":"cron","action":"modify","name":"Cleanup","command":"/usr/bin/cleanup"}
+{"timestamp":"2025-01-22T00:01:10Z","hostname":"persist-host","username":"dave","persistence_type":"scheduled_task","action":"create","name":"Backup","task_path":"\\Tasks\\Backup"}
+{"timestamp":"2025-01-22T00:01:20Z","hostname":"other-host","username":"erin","persistence_type":"service","action":"create","name":"Other","service_manager":"systemd"}
+{"timestamp":"2025-01-22T00:01:30Z","hostname":"other-host","username":"erin","persistence_type":"cron","action":"create","name":"OtherCron","command":"/bin/true"}
+{"timestamp":"2025-01-22T00:02:00Z","hostname":"persist-host","username":"alice","persistence_type":"service","action":"start","name":"Updater","service_manager":"systemd"}

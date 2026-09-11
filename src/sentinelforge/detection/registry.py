@@ -191,6 +191,26 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
         ("one file activity event whose path exactly matches suspicious local file-path context",),
     ),
     RuleDefinition(
+        "SERVICE_CREATED_OR_UPDATED", "Service created or updated",
+        "A service was created or updated.", "medium", 1, True,
+        ("one service persistence event with create or update action",),
+    ),
+    RuleDefinition(
+        "SCHEDULED_TASK_CREATED_OR_UPDATED", "Scheduled task created or updated",
+        "A scheduled task was created or updated.", "medium", 1, True,
+        ("one scheduled task persistence event with create or update action",),
+    ),
+    RuleDefinition(
+        "SERVICE_STARTED_AFTER_CREATION", "Service started after creation",
+        "A service was started after creation or update.", "medium", 300, True,
+        ("service create or update followed by start within 300 seconds for explicit identity",),
+    ),
+    RuleDefinition(
+        "SCHEDULED_TASK_CREATED_WITH_COMMAND", "Scheduled task created with command",
+        "A scheduled task was created with an explicit command.", "medium", 1, True,
+        ("one scheduled task create or update event with an explicit command",),
+    ),
+    RuleDefinition(
         "AUTHENTICATION_TO_NETWORK_ACTIVITY",
         "Authentication to network activity",
         "A successful authentication is followed by network activity for the same explicit user and host.",

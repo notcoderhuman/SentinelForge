@@ -10,6 +10,7 @@ from ..parsers.linux_auth import ParseDiagnostic, parse_lines
 from ..parsers.network import parse_lines as parse_network_lines
 from ..parsers.dns import parse_lines as parse_dns_lines
 from ..parsers.process import parse_lines as parse_process_lines
+from ..parsers.system_persistence import parse_lines as parse_persistence_lines
 from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
 from ..parsers.file_activity import parse_lines as parse_file_activity_lines, parse_file as parse_file_activity_file
 from .reader import SourcePath, read_lines, read_sources
@@ -28,6 +29,8 @@ def parser_for_source(source: str) -> LineParser:
         return parse_network_lines
     if source == "process_execution":
         return parse_process_lines
+    if source in {"system_persistence", "persistence"}:
+        return parse_persistence_lines
     if source in {"file_activity", "file"}:
         return parse_file_activity_lines
     if source in {"dns_query", "dns"}:
@@ -64,6 +67,8 @@ def ingest_file(source_path: SourcePath, parser: LineParser = parse_lines, sourc
     return ingest_lines(read_lines(source_path), parser=parser)
 
 
-def ingest_files(source_paths: Sequence[SourcePath], parser: LineParser = parse_lines) -> IngestionResult:
+def ingest_files(source_paths: Sequence[SourcePath], parser: LineParser = parse_lines, source: str = "linux_auth") -> IngestionResult:
     """Read multiple local sources in order and parse their combined lines."""
+    if parser is parse_lines and source != "linux_auth":
+        parser = parser_for_source(source)
     return ingest_lines(read_sources(source_paths), parser=parser)
