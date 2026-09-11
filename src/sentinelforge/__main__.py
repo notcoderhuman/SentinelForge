@@ -55,6 +55,24 @@ def _build_parser() -> argparse.ArgumentParser:
     create_admin.add_argument("--database", required=True)
     list_users = user_subparsers.add_parser("list")
     list_users.add_argument("--database", required=True)
+
+    # ------------------------------------------------------------------
+    # Phase 27: analyze-with-llm
+    # ------------------------------------------------------------------
+    llm_parser = subparsers.add_parser("analyze-with-llm", help="run detection and send package to an LLM analyst for structured assessment")
+    llm_parser.add_argument("path", help="path to telemetry fixture file")
+    llm_parser.add_argument("--source", choices=source_choices, default="linux_auth",
+                            help="telemetry source type")
+    llm_parser.add_argument("--provider", default="mock",
+                            help="analyst provider: 'mock' (deterministic mock for validation-pipeline testing; its default fake IDs may fail validation against a real package), 'deepseek' (real API, requires DEEPSEEK_API_KEY), or 'none' (offline preview, no network)")
+    llm_parser.add_argument("--model", default=None,
+                            help="override model name (provider default if omitted)")
+    llm_parser.add_argument("--timeout", type=float, default=None,
+                            help="API timeout in seconds (provider default if omitted)")
+    llm_parser.add_argument("--json", action="store_true",
+                            help="emit full structured JSON output")
+    llm_parser.add_argument("--strict", action="store_true",
+                            help="treat unsupported claim warnings as validation errors")
     return parser
 
 
@@ -79,6 +97,131 @@ def _run_existing_command(arguments: argparse.Namespace) -> dict:
     investigations = [create_investigation(incident) for incident in incidents]
     return {"investigations": [investigation.to_dict() for investigation in investigations],
             "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics]}
+
+
+def _run_llm_analyze(arguments: argparse.Namespace) -> int:
+    """Phase 27 analyze-with-llm command: detect, package, analyze, validate."""
+    from .analyst import AnalystProvider, build_analyst_prompt
+    from .analyst._validator import validate_assessment
+    from .investigation_package import build_package
+
+    # 1. Ingest telemetry
+    try:
+        result: IngestionResult = ingest_file(arguments.path, source=arguments.source)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"ingestion error: {exc}") from exc
+
+    # 2. Run detection
+    try:
+        alerts = DetectionEngine().detect(result.events)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"detection error: {exc}") from exc
+
+    # 3. Build canonical InvestigationPackage
+    diagnostics = [d.to_dict() for d in result.diagnostics]
+    package = build_package(alerts, diagnostics)
+    package_dict = package.to_dict()
+
+    # 4. Handle offline mode (provider=none)
+    if arguments.provider == "none":
+        prompt = build_analyst_prompt(package_dict)
+        output = {
+            "status": "offline",
+            "package_id": package.package_id,
+            "alert_count": len(package.alerts),
+            "evidence_count": len(package.evidence),
+            "diagnostic_count": len(package.diagnostics),
+            "provider": "none",
+            "prompt_preview": prompt[:500] + ("..." if len(prompt) > 500 else ""),
+            "assessment": None,
+            "validation": {"valid": True, "errors": [], "warnings": ["No provider was called — offline preview only"]},
+        }
+        if arguments.json:
+            print(json.dumps(output, indent=2, sort_keys=True))
+        else:
+            print(f"Offline mode — no provider called")
+            print(f"Package: {package.package_id}")
+            print(f"  Alerts: {len(package.alerts)}")
+            print(f"  Evidence: {len(package.evidence)}")
+            print(f"  Diagnostics: {len(package.diagnostics)}")
+        return 0
+
+    # 5. Configure provider
+    config = {}
+    if arguments.model:
+        config["model"] = arguments.model
+    if arguments.timeout:
+        config["timeout"] = arguments.timeout
+
+    try:
+        provider = AnalystProvider.create(arguments.provider, **config)
+    except ValueError as exc:
+        raise SystemExit(f"provider error: {exc}") from exc
+    except Exception as exc:
+        raise SystemExit(f"provider configuration error: {exc}") from exc
+
+    # 6. Send to provider
+    try:
+        raw_output = provider.analyze(package_dict, **config)
+    except Exception as exc:
+        output = {
+            "status": "provider_error",
+            "error": str(exc),
+            "package_id": package.package_id,
+            "raw_output": None,
+            "assessment": None,
+        }
+        if arguments.json:
+            print(json.dumps(output, indent=2, sort_keys=True))
+        else:
+            print(f"Provider error: {exc}")
+        return 1
+
+    # 7. Validate model output
+    valid_alert_ids = {a.alert_id for a in package.alerts}
+    valid_evidence_ids = {e.evidence_id for e in package.evidence}
+
+    validation, assessment = validate_assessment(
+        raw_output,
+        package_id=package.package_id,
+        valid_alert_ids=valid_alert_ids,
+        valid_evidence_ids=valid_evidence_ids,
+        strict=arguments.strict,
+    )
+
+    # 8. Build final output
+    output = {
+        "status": "validated" if validation.valid else "invalid",
+        "package_id": package.package_id,
+        "provider": arguments.provider,
+        "model": arguments.model or "default",
+        "validation": {
+            "valid": validation.valid,
+            "errors": validation.errors,
+            "warnings": validation.warnings,
+        },
+        "raw_output": raw_output,
+        "assessment": assessment.to_dict() if assessment else None,
+    }
+
+    if arguments.json:
+        print(json.dumps(output, indent=2, sort_keys=True))
+    else:
+        status = "✓ VALID" if validation.valid else "✗ INVALID"
+        print(f"LLM Analyst — {status}")
+        print(f"  Package: {package.package_id}")
+        print(f"  Provider: {arguments.provider}")
+        print(f"  Alerts: {len(package.alerts)}")
+        if assessment:
+            print(f"  Executive: {assessment.executive_assessment[:120]}...")
+        if validation.errors:
+            print(f"  Errors: {len(validation.errors)}")
+            for err in validation.errors[:5]:
+                print(f"    - {err}")
+        if validation.warnings:
+            print(f"  Warnings: {len(validation.warnings)}")
+
+    return 0 if validation.valid and not output.get("status") == "provider_error" else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -160,6 +303,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             repository.create_user(user)
             print(json.dumps(user.public_dict(), indent=2, sort_keys=True))
             return 0
+
+    if arguments.command == "analyze-with-llm":
+        return _run_llm_analyze(arguments)
+
     output = _run_existing_command(arguments)
     print(json.dumps(output, indent=2, sort_keys=True))
     return 0

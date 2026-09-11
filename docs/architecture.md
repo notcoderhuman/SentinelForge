@@ -169,7 +169,127 @@ The package is a deterministic representation of available evidence. It does not
 
 ## Phase 27 and beyond
 
-Phase 27 is not yet implemented. Future phases may add LLM analyst integration over the Investigation Package boundary, but the package itself is designed to be useful without any AI.
+Phase 27 adds an optional LLM analyst layer that consumes only the canonical
+Investigation Package (Phase 26) and produces a structured, validated
+`AnalystAssessment`. The detection engine, correlations, and package remain
+authoritative — the LLM is advisory.
+
+```text
+Telemetry
+    ↓
+DetectionEngine
+    ↓
+InvestigationPackage     ← deterministic, authoritative
+    ↓
+AnalystProvider          ← optional, opt-in
+    ↓
+LLM Analyst Output
+    ↓
+Output Validation        ← deterministic: schema, references, claims
+    ↓
+Validated AnalystAssessment
+```
+
+### Architecture
+
+- **`sentinelforge/analyst.py`**: Provider abstraction (`AnalystProvider`),
+  schema dataclasses (`AnalystAssessment`, `AnalystFact`, etc.), prompt builder
+  (`build_analyst_prompt`), and `ValidationResult`.
+- **`sentinelforge/analyst/_validator.py`**: Deterministic output validation:
+  package ID matching, required section checks, alert/evidence ID citation
+  validation, type checking, confidence level validation, unsupported-claim
+  detection (warnings by default, errors in `--strict` mode).
+- **`sentinelforge/analyst/mock.py`**: Deterministic mock provider for tests,
+  returning configurable canned scenarios (valid, invalid IDs, unsupported
+  claims, malformed structure, etc.).
+- **`sentinelforge/analyst/deepseek.py`**: Real DeepSeek Chat Completions
+  provider using only `urllib` (no external dependencies). Configuration is
+  via constructor args or environment variables (`DEEPSEEK_API_KEY`,
+  `DEEPSEEK_ENDPOINT`, `DEEPSEEK_MODEL`).
+
+### Provider interface
+
+`AnalystProvider` is abstract with a single method:
+
+```python
+def analyze(self, package_dict: Dict[str, Any], **kwargs: Any) -> str:
+    """Return raw model response (expected JSON)."""
+```
+
+Factory: `AnalystProvider.create("mock"|"deepseek", **config)`.
+
+### Key design rules
+
+1. **No network by default** — existing commands work without an LLM. The
+   `--provider none` flag builds the package and prints the prompt preview
+   without making any request.
+2. **Only the canonical package is sent** — no raw filesystem paths, secrets,
+   environment variables, or API keys are in the prompt.
+3. **Telemetry is DATA, not instructions** — the prompt explicitly warns the
+   model not to obey instructions found inside command_line, message, raw
+   evidence, DNS names, file contents, or registry values.
+4. **Output validation is deterministic** — mismatched package IDs, missing
+   sections, invented alert/evidence IDs, wrong types, and unsupported
+   confidence levels are errors. Strong claims (compromise, malware, attacker
+   attribution, persistence success, execution confirmed) are warnings by
+   default, errors in `--strict` mode.
+5. **No alert/package mutation** — the package is read-only. The LLM does not
+   create, modify, or suppress alerts, change severity, or perform any action.
+6. **No persistence** — Phase 27 does not store analyst results in the SQLite
+   database. Results are ephemeral CLI output.
+7. **No web console integration** — Phase 27 is CLI/library only.
+
+### Limitations
+
+- The validator checks that referenced alert/evidence IDs exist in the
+  package, but does not verify that the cited evidence actually supports the
+  model's textual claim. Semantic correctness is not guaranteed.
+- Timeline arithmetic (e.g., "7 minutes 30 seconds") is text-level and not
+  validated against the package chronology.
+- Missing-telemetry-implying-clean-host is not detectable by the validator.
+- The DeepSeek provider requires external credentials and network access.
+  No live API call is made in the automated test suite.
+- Model output is inherently probabilistic — the same package may produce
+  different outputs across calls. The provider defaults to temperature=0.0
+  for maximum determinism but identical output is not guaranteed.
+
+### CLI usage
+
+```text
+# Offline/validation mode — preview the prompt, no network call
+python -m sentinelforge analyze-with-llm fixtures/auth.log --source linux_auth --provider none
+
+# Mock provider for testing validation
+python -m sentinelforge analyze-with-llm fixtures/auth.log --source linux_auth --provider mock
+
+# Full validated output as JSON
+python -m sentinelforge analyze-with-llm fixtures/auth.log --source linux_auth --provider mock --json
+
+# Strict mode — unsupported claim warnings become errors
+python -m sentinelforge analyze-with-llm fixtures/auth.log --source linux_auth --provider mock --strict
+
+# DeepSeek (requires DEEPSEEK_API_KEY in environment or --provider deepseek)
+python -m sentinelforge analyze-with-llm fixtures/auth.log --source linux_auth --provider deepseek
+```
+
+### Testing
+
+The test suite (`tests/test_phase27.py`) covers:
+
+- Provider interface and factory
+- Mock provider (8 scenarios)
+- Schema construction and serialization
+- Validator evidence citation (valid, invalid, missing, mismatched)
+- Security claim guardrails (9 patterns, strict mode)
+- Prompt builder (package content, DATA instruction, no secrets)
+- Integration with real package + mock provider
+- CLI offline mode, mock mode, invalid provider, help
+- DeepSeek configuration (no live API call)
+- Adversarial corpus (10 known LLM failure patterns)
+- Regression (Phase 1–26 behavior unchanged)
+
+All tests use only in-memory data and repository fixtures — no network calls
+are required.
 
 ## Local HTTP API boundary
 
