@@ -211,6 +211,26 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
         ("one scheduled task create or update event with an explicit command",),
     ),
     RuleDefinition(
+        "REGISTRY_VALUE_MODIFIED", "Registry value modified",
+        "A registry value was set or modified.", "medium", 1, True,
+        ("one registry event with set_value action and explicit key path and value name",),
+    ),
+    RuleDefinition(
+        "REGISTRY_KEY_DELETED", "Registry key deleted",
+        "A registry key was deleted.", "medium", 1, True,
+        ("one registry event with delete_key action and explicit key path",),
+    ),
+    RuleDefinition(
+        "REGISTRY_RUN_KEY_MODIFICATION", "Registry Run key modified",
+        "A canonical Windows Run or RunOnce key was modified.", "medium", 1, True,
+        ("one registry value modification at a canonical HKCU or HKLM Run or RunOnce location",),
+    ),
+    RuleDefinition(
+        "REGISTRY_ACTIVITY_BY_MANY_PROCESSES", "Registry activity by many processes",
+        "Distinct processes modified one registry key on one host within a bounded window.", "medium", 120, True,
+        ("five distinct process names for one hostname and key path within inclusive 120 seconds",),
+    ),
+    RuleDefinition(
         "AUTHENTICATION_TO_NETWORK_ACTIVITY",
         "Authentication to network activity",
         "A successful authentication is followed by network activity for the same explicit user and host.",

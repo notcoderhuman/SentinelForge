@@ -20,7 +20,7 @@ from .threat_context_engine import load_context
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SentinelForge defensive log analysis")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    source_choices = ("linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence")
+    source_choices = ("linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry")
     for command in ("parse", "detect", "incident", "investigate", "observables"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("path", help="path to a documented auth fixture")
@@ -30,7 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--json", action="store_true", help="emit deterministic JSON")
     analyze_parser.add_argument("--severity", choices=("low", "medium", "high", "critical"))
     analyze_parser.add_argument("--incident", dest="incident_id")
-    analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence"), default="linux_auth")
+    analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry"), default="linux_auth")
     analyze_parser.add_argument("--database", help="local SQLite database path")
     history_parser = subparsers.add_parser("history")
     history_parser.add_argument("--database", required=True, help="local SQLite database path")

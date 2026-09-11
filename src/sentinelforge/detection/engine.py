@@ -81,6 +81,7 @@ class DetectionEngine:
         if self.registry.get("FILE_ACTIVITY_ON_SENSITIVE_PATH").enabled and self.config.sensitive_file_path_enabled:
             alerts.extend(self._sensitive_file_activity(ordered_events, threat_context))
         alerts.extend(self._event_correlations(ordered_events))
+        alerts.extend(self._registry_detections(ordered_events))
         alerts.extend(self._persistence_detections(ordered_events))
         unique = {alert.alert_id: alert for alert in alerts}
         return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
@@ -662,6 +663,64 @@ class DetectionEngine:
 
         unique = {alert.alert_id: alert for alert in alerts}
         return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+
+    def _registry_detections(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        """Detect the four Phase 23 registry behaviors from explicit telemetry."""
+        alerts: List[Alert] = []
+        registry = [event for event in events if event.event_type in {"registry", "registry_activity", "registry_change"}]
+
+        def emit(rule_id: str, evidence: Sequence[SecurityEvent], text: str) -> None:
+            definition = self.registry.get(rule_id)
+            if definition.enabled:
+                ordered = sorted(evidence, key=lambda event: (event.timestamp, event.raw))
+                alerts.append(create_alert(rule_id, definition.severity,
+                                           definition.name + " observed.", text, ordered))
+
+        for event in registry:
+            action = (event.registry_action or "").strip().lower()
+            key_path = (event.key_path or "").strip()
+            if action == "set_value" and key_path and (event.value_name or "").strip():
+                emit("REGISTRY_VALUE_MODIFIED", [event],
+                     "A registry value was set or modified at an explicit key and value name.")
+            if action == "delete_key" and key_path:
+                emit("REGISTRY_KEY_DELETED", [event],
+                     "A registry key was deleted at an explicit key path.")
+            canonical = self._canonical_run_key(key_path, event.hive)
+            if canonical and action == "set_value":
+                emit("REGISTRY_RUN_KEY_MODIFICATION", [event],
+                     "A canonical Windows Run or RunOnce registry key was modified.")
+
+        grouped: Dict[tuple[str, str, str], List[SecurityEvent]] = {}
+        for event in registry:
+            if event.hostname and event.key_path and event.process_name:
+                grouped.setdefault((event.hostname, event.hive, event.key_path), []).append(event)
+        threshold = self.config.registry_activity_threshold
+        window = timedelta(seconds=self.config.registry_activity_window_seconds)
+        for entity, items in sorted(grouped.items(), key=lambda item: item[0]):
+            for end in range(threshold - 1, len(items)):
+                matching = items[end - threshold + 1:end + 1]
+                names = {item.process_name for item in matching if item.process_name}
+                if len(names) >= threshold and matching[-1].timestamp - matching[0].timestamp <= window:
+                    emit("REGISTRY_ACTIVITY_BY_MANY_PROCESSES", matching,
+                         "Registry activity for one explicit host and key path came from many distinct processes within the configured window.")
+                    break
+        unique = {alert.alert_id: alert for alert in alerts}
+        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+
+    @staticmethod
+    def _canonical_run_key(key_path: str, hive: str | None = None) -> bool:
+        normalized = key_path.replace("/", "\\").strip().rstrip("\\").lower()
+        if hive:
+            hive_name = hive.strip().lower()
+            hive_name = {"hkey_current_user": "hkcu", "hkey_local_machine": "hklm"}.get(hive_name, hive_name)
+            if "\\" not in normalized or not normalized.startswith(("hkcu\\", "hklm\\")):
+                normalized = hive_name + "\\" + normalized
+        return normalized in {
+            "hkcu\\software\\microsoft\\windows\\currentversion\\run",
+            "hkcu\\software\\microsoft\\windows\\currentversion\\runonce",
+            "hklm\\software\\microsoft\\windows\\currentversion\\run",
+            "hklm\\software\\microsoft\\windows\\currentversion\\runonce",
+        }
 
     def _persistence_detections(self, events: Sequence[SecurityEvent]) -> List[Alert]:
         """Detect only explicit system-persistence records and relationships."""

@@ -40,7 +40,10 @@ def _event(data: Dict[str, Any]) -> SecurityEvent:
         response_code=data.get("response_code"), resolved_ip=data.get("resolved_ip"),
         query_name=data.get("query_name"), answers=list(data.get("answers", ())),
         path=data.get("path"), action=data.get("action"), file_hash=data.get("file_hash"),
-        old_path=data.get("old_path"), size=data.get("size"))
+        old_path=data.get("old_path"), size=data.get("size"),
+         hive=data.get("hive"), key_path=data.get("key_path"), registry_action=data.get("registry_action"),
+         value_name=data.get("value_name"), value_data=data.get("value_data"), value_type=data.get("value_type"),
+         old_key_path=data.get("old_key_path"))
 
 def _evidence(data: Dict[str, Any]) -> Evidence:
     return Evidence(data["evidence_id"], _event(data["event"]), data["evidence_type"],
