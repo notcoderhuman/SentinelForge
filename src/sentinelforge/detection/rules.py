@@ -22,4 +22,15 @@ class RuleConfig:
     source_many_destinations_window_seconds: int = 120
     destination_many_sources_threshold: int = 5
     destination_many_sources_window_seconds: int = 120
+    # Phase 18 process telemetry detections.
+    privileged_process_enabled: bool = True
+    repeated_process_threshold: int = 5
+    repeated_process_window_seconds: int = 120
+    parent_process_children_threshold: int = 5
+    parent_process_children_window_seconds: int = 120
+    user_process_names_threshold: int = 5
+    user_process_names_window_seconds: int = 120
+    # Compatibility aliases used by early Phase 18 callers.
+    process_parent_child_threshold: int | None = None
+    user_process_threshold: int | None = None
     sudo_enabled: bool = True

@@ -32,6 +32,11 @@ class SecurityEvent:
     destination_port: Optional[int] = None
     protocol: Optional[str] = None
     process_name: Optional[str] = None
+    process_id: Optional[int] = None
+    parent_process_id: Optional[int] = None
+    command_line: Optional[str] = None
+    executable_path: Optional[str] = None
+    privilege: Optional[str] = None
     direction: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -46,7 +51,7 @@ class SecurityEvent:
         values["timestamp"] = self.timestamp.isoformat().replace("+00:00", "Z")
         if self.event_id is None:
             values.pop("event_id")
-        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "direction"):
+        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "process_id", "parent_process_id", "command_line", "executable_path", "privilege", "direction"):
             if values[field] is None:
                 values.pop(field)
         return values

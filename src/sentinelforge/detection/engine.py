@@ -56,6 +56,14 @@ class DetectionEngine:
         alerts.extend(self._source_targets_multiple_accounts(ordered_events))
         alerts.extend(self._account_targeted_by_multiple_sources(ordered_events))
         alerts.extend(self._windows_privileged_logons(ordered_events))
+        if self.registry.get("PRIVILEGED_PROCESS_EXECUTION").enabled and self.config.privileged_process_enabled:
+            alerts.extend(self._privileged_process_execution(ordered_events))
+        if self.registry.get("REPEATED_PROCESS_EXECUTION").enabled:
+            alerts.extend(self._repeated_process_execution(ordered_events))
+        if self.registry.get("PARENT_PROCESS_SPAWNS_MANY_CHILDREN").enabled:
+            alerts.extend(self._parent_process_spawns_many_children(ordered_events))
+        if self.registry.get("USER_EXECUTES_MANY_DISTINCT_PROCESSES").enabled:
+            alerts.extend(self._user_runs_many_process_names(ordered_events))
         return sorted(alerts, key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
@@ -300,6 +308,102 @@ class DetectionEngine:
             [event],
         ) for event in events if event.source == "windows-security" and event.event_id == "4672"
               and event.event_type == "privileged_logon" and event.username]
+
+    def _process_events(self, events: Sequence[SecurityEvent]) -> List[SecurityEvent]:
+        return [event for event in events if event.event_type == "process_execution"]
+
+    def _privileged_process_execution(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        definition = self.registry.get("PRIVILEGED_PROCESS_EXECUTION")
+        return [create_alert(
+            definition.rule_id, definition.severity,
+            "Privileged process execution observed.",
+            "A process execution record explicitly declared a privileged execution context.",
+            [event],
+        ) for event in self._process_events(events)
+            if isinstance(event.privilege, str) and event.privilege.strip().lower() in {
+                "root", "admin", "privileged"
+            }]
+
+    def _repeated_process_execution(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, str], List[SecurityEvent]] = {}
+        for event in self._process_events(events):
+            source_identity = event.hostname
+            process_identity = event.process_name or event.process
+            if source_identity and process_identity:
+                grouped.setdefault((source_identity, process_identity), []).append(event)
+        return self._process_threshold_alerts(
+            grouped, self.config.repeated_process_threshold,
+            self.config.repeated_process_window_seconds,
+            "REPEATED_PROCESS_EXECUTION", "Repeated process execution observed.",
+            "Observed repeated executions of process {process} from source identity {source} within the configured window.",
+        )
+
+    def _parent_process_spawns_many_children(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, int], List[SecurityEvent]] = {}
+        for event in self._process_events(events):
+            if event.hostname and event.parent_process_id is not None and event.process_id is not None:
+                grouped.setdefault((event.hostname, event.parent_process_id), []).append(event)
+        return self._process_distinct_alerts(
+            grouped, (self.config.process_parent_child_threshold
+                      if self.config.process_parent_child_threshold is not None
+                      else self.config.parent_process_children_threshold),
+            self.config.parent_process_children_window_seconds,
+            "PARENT_PROCESS_SPAWNS_MANY_CHILDREN", "Parent process spawned many children.",
+            "Observed parent PID {parent} on host {host} associated with distinct child process IDs within the configured window.",
+            lambda event: event.process_id,
+        )
+
+    def _user_runs_many_process_names(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        grouped: Dict[tuple[str, str], List[SecurityEvent]] = {}
+        for event in self._process_events(events):
+            process_name = event.process_name or event.process
+            if event.hostname and event.username and process_name:
+                grouped.setdefault((event.hostname, event.username), []).append(event)
+        return self._process_distinct_alerts(
+            grouped, (self.config.user_process_threshold
+                      if self.config.user_process_threshold is not None
+                      else self.config.user_process_names_threshold),
+            self.config.user_process_names_window_seconds,
+            "USER_EXECUTES_MANY_DISTINCT_PROCESSES", "User ran many process names.",
+            "Observed user {user} on host {host} running distinct process names within the configured window.",
+            lambda event: event.process_name or event.process,
+        )
+
+    def _process_threshold_alerts(self, grouped_events: Dict[tuple[str, str], List[SecurityEvent]],
+                                  threshold: int, window_seconds: int, rule_id: str,
+                                  title: str, description: str) -> List[Alert]:
+        alerts: List[Alert] = []
+        window = timedelta(seconds=window_seconds)
+        for entity, grouped in sorted(grouped_events.items(), key=lambda item: str(item[0])):
+            for end_index in range(threshold - 1, len(grouped)):
+                matching = grouped[end_index - threshold + 1:end_index + 1]
+                if matching[-1].timestamp - matching[0].timestamp <= window:
+                    alerts.append(create_alert(rule_id, self.registry.get(rule_id).severity, title,
+                                               description.format(source=entity[0], process=entity[1]), matching))
+                    break
+        return alerts
+
+    def _process_distinct_alerts(self, grouped_events: Dict[tuple[str, object], List[SecurityEvent]],
+                                 threshold: int, window_seconds: int, rule_id: str,
+                                 title: str, description: str,
+                                 entity_key: Callable[[SecurityEvent], object]) -> List[Alert]:
+        alerts: List[Alert] = []
+        window = timedelta(seconds=window_seconds)
+        for entity, grouped in sorted(grouped_events.items(), key=lambda item: str(item[0])):
+            for end_index in range(threshold - 1, len(grouped)):
+                matching = grouped[end_index - threshold + 1:end_index + 1]
+                if (matching[-1].timestamp - matching[0].timestamp <= window
+                        and len({entity_key(event) for event in matching}) >= threshold):
+                    if rule_id == "PARENT_PROCESS_SPAWNS_MANY_CHILDREN":
+                        values = {"host": entity[0], "parent": entity[1]}
+                    else:
+                        values = {"host": entity[0], "user": entity[1]}
+                    alerts.append(create_alert(
+                        rule_id, self.registry.get(rule_id).severity, title,
+                        description.format(**values), matching,
+                    ))
+                    break
+        return alerts
 
     def _distinct_entity_alerts(self, grouped_events: Dict[str, List[SecurityEvent]], threshold: int,
                                 window_seconds: int, rule_id: str, title: str, description: str,

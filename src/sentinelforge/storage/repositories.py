@@ -27,7 +27,13 @@ def _event(data: Dict[str, Any]) -> SecurityEvent:
     return SecurityEvent(timestamp=_dt(data["timestamp"]), source=data["source"],
         event_type=data["event_type"], hostname=data.get("hostname"), process=data.get("process"),
         username=data.get("username"), source_ip=data.get("source_ip"), message=data["message"],
-        raw=data["raw"], event_id=data.get("event_id"))
+        raw=data["raw"], event_id=data.get("event_id"),
+        source_port=data.get("source_port"), destination_ip=data.get("destination_ip"),
+        destination_port=data.get("destination_port"), protocol=data.get("protocol"),
+        process_name=data.get("process_name"), process_id=data.get("process_id"),
+        parent_process_id=data.get("parent_process_id"), command_line=data.get("command_line"),
+        executable_path=data.get("executable_path"), privilege=data.get("privilege"),
+        direction=data.get("direction"))
 
 def _evidence(data: Dict[str, Any]) -> Evidence:
     return Evidence(data["evidence_id"], _event(data["event"]), data["evidence_type"],

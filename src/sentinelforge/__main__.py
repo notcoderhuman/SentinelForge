@@ -28,7 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--json", action="store_true", help="emit deterministic JSON")
     analyze_parser.add_argument("--severity", choices=("low", "medium", "high", "critical"))
     analyze_parser.add_argument("--incident", dest="incident_id")
-    analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security", "network_connection"), default="linux_auth")
+    analyze_parser.add_argument("--source", choices=("linux_auth", "windows_security", "network_connection", "process_execution"), default="linux_auth")
     analyze_parser.add_argument("--database", help="local SQLite database path")
     history_parser = subparsers.add_parser("history")
     history_parser.add_argument("--database", required=True, help="local SQLite database path")

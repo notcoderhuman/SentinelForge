@@ -37,7 +37,7 @@ class ThreadSafeAuthServer(SentinelHTTPServer):
 
 class ApiTests(unittest.TestCase):
     def test_source_allowlist_is_explicit_and_network_enabled(self):
-        self.assertEqual(ALLOWED_SOURCES, frozenset({"linux_auth", "windows_security", "network_connection"}))
+        self.assertEqual(ALLOWED_SOURCES, frozenset({"linux_auth", "windows_security", "network_connection", "process_execution"}))
 
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -110,6 +110,16 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.request("GET", "/health"), (200, {"service": "sentinelforge", "status": "ok"}))
         self.assertEqual(self.request("GET", "/alerts"), (200, []))
         self.assertEqual(self.request("GET", "/runs"), (200, []))
+
+    def test_process_source_is_allowlisted(self):
+        self.assertIn("process_execution", ALLOWED_SOURCES)
+        self.assertNotIn("process", ALLOWED_SOURCES)
+
+    def test_invalid_source_and_field_are_rejected(self):
+        invalid_source = {"path": "fixtures/auth.log", "source": "not-a-source"}
+        invalid_field = {"path": "fixtures/auth.log", "source": "process_execution", "unexpected": True}
+        self.assertEqual(self.request("POST", "/analyze", invalid_source)[0], 400)
+        self.assertEqual(self.request("POST", "/analyze", invalid_field)[0], 400)
 
     def test_analysis_and_persisted_reads(self):
         status, report = self.request("POST", "/analyze", {"path": "fixtures/auth.log", "source": "linux_auth"})

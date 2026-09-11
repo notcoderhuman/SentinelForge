@@ -48,6 +48,22 @@ only observed connection patterns. Suspicious IP matching reuses the existing
 local threat-context file; no network access, reputation lookup, malware claim,
 or code execution is performed.
 
+## Phase 18 process telemetry boundary
+
+The `process_execution` source accepts one JSON object per line with required
+`timestamp`, `hostname`, `process_name`, `process_id`, and `username` fields.
+Optional fields include `parent_process_id`, `command_line`, `executable_path`,
+and explicit `privilege`. Process IDs are bounded integers and malformed
+records become diagnostics. The parser preserves raw JSON and treats command
+lines and executable paths strictly as data; it never executes them.
+
+Detections report only explicitly privileged execution, repeated executions,
+parent processes associated with many distinct children, and users executing
+many distinct process names. These are conservative observations, not malware,
+persistence, lateral movement, exploitation, LOLBin, or command-and-control
+claims. The source performs no subprocess execution, network access, or
+external enrichment.
+
 ## Local HTTP API boundary
 
 Phase 14 adds a standard-library `http.server` interface in `sentinelforge.api`.
