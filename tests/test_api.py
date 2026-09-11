@@ -1,21 +1,78 @@
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
 from http.client import HTTPConnection
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from sentinelforge.api.server import MAX_BODY_BYTES, SentinelHTTPServer
+from sentinelforge.auth.service import AuthService
+from sentinelforge.storage import Database
+
+
+class ThreadSafeAuthServer(SentinelHTTPServer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._db.close()
+        self._db = None
+        self.auth = None
+
+    def server_close(self):
+        ThreadingHTTPServer.server_close(self)
+
+    def process_request(self, request, client_address):
+        if self.auth is None:
+            self._db = Database(self.database)
+            self.auth = AuthService(self._db)
+        try:
+            self.finish_request(request, client_address)
+        finally:
+            self._db.close()
+            self._db = None
+            self.auth = None
+            self.shutdown_request(request)
 
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.database = str(Path(self.directory.name) / "analysis.db")
-        self.server = SentinelHTTPServer("127.0.0.1", 0, self.database)
+        with Database(self.database) as db:
+            AuthService(db).create_user("admin_test", "correct horse battery", "admin")
+        self.server = ThreadSafeAuthServer("127.0.0.1", 0, self.database)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        self.cookies = {}
+        self.login()
+
+    def login(self):
+        status, body, headers = self.request_with_headers("POST", "/auth/login", {"username": "admin_test", "password": "correct horse battery"})
+        self.assertEqual(status, 200)
+        for header in headers:
+            if header[0].lower() == "set-cookie":
+                cookie = header[1].split(";", 1)[0]
+                self.cookies[cookie.split("=", 1)[0]] = cookie
+        csrf_cookie = next(value.split(";", 1)[0] for key, value in headers if key.lower() == "set-cookie" and value.startswith("sf_csrf="))
+        self.csrf = csrf_cookie.split("=", 1)[1]
+
+    def request_with_headers(self, method, path, body=None):
+        headers = {"Cookie": "; ".join(self.cookies.values())} if self.cookies else {}
+        if body is not None:
+            encoded = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
+            headers["Content-Length"] = str(len(encoded))
+        else:
+            encoded = None
+        if method == "POST" and path != "/auth/login":
+            headers["X-CSRF-Token"] = getattr(self, "csrf", "")
+            headers["Origin"] = f"http://127.0.0.1:{self.server.server_port}"
+        self.connection.request(method, path, encoded, headers)
+        response = self.connection.getresponse()
+        value = json.loads(response.read().decode()) if response.getheader("Content-Length") != "0" else None
+        return response.status, value, response.getheaders()
 
     def tearDown(self):
         self.connection.close()
@@ -25,18 +82,28 @@ class ApiTests(unittest.TestCase):
         self.directory.cleanup()
 
     def request(self, method, path, body=None):
-        headers = {}
+        headers = {"Cookie": "; ".join(self.cookies.values())} if self.cookies else {}
         encoded = None
         if body is not None:
             encoded = json.dumps(body).encode()
             headers["Content-Type"] = "application/json"
             headers["Content-Length"] = str(len(encoded))
+        else:
+            encoded = None
+        if method == "POST" and path != "/auth/login":
+            headers["X-CSRF-Token"] = getattr(self, "csrf", "")
+            headers["Origin"] = f"http://127.0.0.1:{self.server.server_port}"
         self.connection.request(method, path, encoded, headers)
         response = self.connection.getresponse()
         value = json.loads(response.read().decode()) if response.getheader("Content-Length") != "0" else None
         return response.status, value
 
     def test_health_and_empty_resources(self):
+        self.connection.close()
+        self.connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+        self.cookies = {}
+        self.assertEqual(self.request("GET", "/alerts")[0], 401)
+        self.login()
         self.assertEqual(self.request("GET", "/health"), (200, {"service": "sentinelforge", "status": "ok"}))
         self.assertEqual(self.request("GET", "/alerts"), (200, []))
         self.assertEqual(self.request("GET", "/runs"), (200, []))

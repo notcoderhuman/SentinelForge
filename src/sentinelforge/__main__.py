@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
+import secrets
 from typing import Sequence
 
 from .detection.engine import DetectionEngine
@@ -34,6 +36,12 @@ def _build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
     serve_parser.add_argument("--database")
+    user_parser = subparsers.add_parser("user")
+    user_subparsers = user_parser.add_subparsers(dest="user_command", required=True)
+    create_admin = user_subparsers.add_parser("create-admin")
+    create_admin.add_argument("--database", required=True)
+    list_users = user_subparsers.add_parser("list")
+    list_users.add_argument("--database", required=True)
     return parser
 
 
@@ -81,6 +89,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .api import serve
         serve(arguments.host, arguments.port, arguments.database)
         return 0
+    if arguments.command == "user":
+        from datetime import datetime, timezone
+        from .auth.passwords import hash_password, validate_password
+        from .auth.users import User
+        from .storage import AuthRepository, Database
+        with Database(arguments.database) as db:
+            repository = AuthRepository(db)
+            if arguments.user_command == "list":
+                print(json.dumps([user.public_dict() for user in repository.list_users()], indent=2, sort_keys=True))
+                return 0
+            if repository.list_users(active_only=True):
+                raise SystemExit("an enabled user already exists")
+            username = input("Admin username: ").strip()
+            password = getpass.getpass("Admin password: ")
+            confirmation = getpass.getpass("Confirm admin password: ")
+            if password != confirmation:
+                raise SystemExit("passwords do not match")
+            validate_password(password)
+            user = User(secrets.token_urlsafe(16), username, hash_password(password), "admin", datetime.now(timezone.utc), True)
+            repository.create_user(user)
+            print(json.dumps(user.public_dict(), indent=2, sort_keys=True))
+            return 0
     output = _run_existing_command(arguments)
     print(json.dumps(output, indent=2, sort_keys=True))
     return 0

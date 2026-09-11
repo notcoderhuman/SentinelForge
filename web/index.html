@@ -9,20 +9,22 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">SF</span><div><strong>SentinelForge</strong><small>SOC CONSOLE</small></div></div>
-    <div class="top-actions"><span id="api-status" class="status-dot unavailable">API unavailable</span><button id="refresh-btn" class="button ghost">Refresh</button></div>
+    <div class="top-actions"><span id="api-status" class="status-dot unavailable">API unavailable</span><span id="current-user" class="user-chip" aria-live="polite">Local session</span><button id="logout-btn" class="button ghost hidden" type="button">Log out</button><button id="refresh-btn" class="button ghost">Refresh</button></div>
   </header>
   <div class="layout">
     <aside class="sidebar" aria-label="Primary navigation">
       <nav id="nav" class="nav-list">
+         <button class="nav-item admin-only hidden" data-page="admin">Administration</button>
         <button class="nav-item active" data-page="overview">Overview</button>
         <button class="nav-item" data-page="alerts">Alerts</button>
         <button class="nav-item" data-page="incidents">Incidents</button>
         <button class="nav-item" data-page="investigations">Investigations</button>
         <button class="nav-item" data-page="runs">Runs</button>
       </nav>
-      <div class="sidebar-foot">LOCAL ANALYST INTERFACE<br><span>No authentication · loopback only</span></div>
+      <div class="sidebar-foot">LOCAL ANALYST INTERFACE<br><span id="session-copy">Session status is checked by the API.</span></div>
     </aside>
     <main id="main" class="main" tabindex="-1">
+      <section id="login-view" class="login-view hidden" aria-labelledby="login-title"><div class="login-card"><p class="eyebrow">SECURE ACCESS</p><h1 id="login-title">Sign in to SentinelForge</h1><p class="muted">Use your assigned account. Your password is sent only to the API and is never stored in this browser.</p><form id="login-form" class="form-grid"><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Sign in</button></form><div id="login-message" class="message hidden" role="alert"></div></div></section>
       <div id="global-message" class="message hidden" role="alert"></div>
       <section id="page-overview" class="page active" aria-labelledby="overview-title">
         <div class="page-heading"><div><p class="eyebrow">OPERATIONS / OVERVIEW</p><h1 id="overview-title">Security activity overview</h1><p class="muted">A compact view of persisted defensive analysis.</p></div></div>
@@ -34,6 +36,7 @@
       <section id="page-alerts" class="page" aria-labelledby="alerts-title"><div class="page-heading"><div><p class="eyebrow">DETECTIONS / ALERTS</p><h1 id="alerts-title">Alerts</h1><p class="muted">Immutable detection results and their preserved evidence.</p></div></div><div class="filters"><label>Severity<select id="alert-severity"><option value="">All</option><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label><label>Rule ID<input id="alert-rule" placeholder="Filter rule ID"></label></div><div id="alerts-list" class="panel table-wrap"></div></section>
       <section id="page-incidents" class="page" aria-labelledby="incidents-title"><div class="page-heading"><div><p class="eyebrow">CASEWORK / INCIDENTS</p><h1 id="incidents-title">Incidents</h1><p class="muted">Correlated security activity with transparent prioritization.</p></div></div><div class="filters"><label>Severity<select id="incident-severity"><option value="">All</option><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label></div><div id="incidents-list" class="panel table-wrap"></div></section>
       <section id="page-investigations" class="page" aria-labelledby="investigations-title"><div class="page-heading"><div><p class="eyebrow">CASEWORK / INVESTIGATIONS</p><h1 id="investigations-title">Investigations</h1><p class="muted">Evidence timelines and context. Analyst notes are read-only.</p></div></div><div id="investigations-list" class="panel table-wrap"></div></section>
+      <section id="page-admin" class="page admin-only" aria-labelledby="admin-title"><div class="page-heading"><div><p class="eyebrow">GOVERNANCE / ADMINISTRATION</p><h1 id="admin-title">Users and audit</h1><p class="muted">Administrative data supplied by the API.</p></div></div><div class="content-grid two-col"><article class="panel"><div class="panel-heading"><h2>Users</h2></div><div id="users-list" class="table-wrap"></div></article><article class="panel"><div class="panel-heading"><h2>Audit log</h2></div><div id="audit-list" class="table-wrap"></div></article></div></section>
       <section id="page-runs" class="page" aria-labelledby="runs-title"><div class="page-heading"><div><p class="eyebrow">HISTORY / ANALYSIS RUNS</p><h1 id="runs-title">Runs</h1><p class="muted">Persisted executions supplied by the configured API database.</p></div></div><div id="runs-list" class="panel table-wrap"></div></section>
     </main>
   </div>

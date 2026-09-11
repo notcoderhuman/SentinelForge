@@ -2,5 +2,6 @@
 
 from .database import Database
 from .repositories import AnalysisRepository
+from .auth_repositories import AuthRepository
 
-__all__ = ["AnalysisRepository", "Database"]
+__all__ = ["AnalysisRepository", "AuthRepository", "Database"]

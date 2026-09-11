@@ -61,6 +61,29 @@ bounded and validated, paths remain local to the working directory, errors are
 concise JSON, and broad CORS is intentionally absent. This is a local
 development/analyst interface, not an authenticated production service.
 
+## Authentication, authorization, and audit boundary
+
+`GET /health` is intentionally public and reports only minimal service status;
+all analysis, account, audit, and session information remains protected.
+
+Phase 16 adds standard-library authentication primitives under `sentinelforge.auth`.
+Passwords use salted `hashlib.scrypt` hashes with encoded parameters and constant-time
+verification. Users are stored in SQLite with roles `admin`, `analyst`, or `viewer`.
+Sessions are server-side, cryptographically random, expiring, and represented to
+browsers by HttpOnly, SameSite=Lax cookies. A separate non-HttpOnly CSRF cookie is
+checked against a server-side session hash for state-changing requests; local Host
+and Origin values are also validated.
+
+Protected analysis resources require authentication. Analysts may run analysis;
+viewers are read-only; admins may manage users and read audit records. Audit records
+are append-only application records and never contain passwords, password hashes,
+session secrets, or CSRF tokens. Login failures use a bounded in-memory local rate
+limiter that resets on process restart. The first administrator is created explicitly
+with `python -m sentinelforge user create-admin --database PATH`, using hidden
+interactive password input. There is no default credential, external identity
+provider, SSO, or public deployment support. This remains a local development and
+analyst service, not an internet-facing identity system.
+
 ## SOC web console boundary
 
 Phase 15 adds a plain HTML/CSS/JavaScript analyst console in `web/`. Only the

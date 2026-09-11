@@ -1,7 +1,7 @@
 /* SentinelForge console: API data is rendered with textContent only. */
 (function () {
   "use strict";
-  const state = { data: { runs: [], alerts: [], incidents: [], investigations: [] }, page: "overview" };
+  const state = { data: { runs: [], alerts: [], incidents: [], investigations: [] }, page: "overview", user: null, authSupported: false, accessToken: null };
   const $ = (id) => document.getElementById(id);
   const esc = (value) => value == null ? "—" : String(value);
   const date = (value) => value ? new Date(value).toLocaleString() : "—";
@@ -10,20 +10,30 @@
   const status = (value) => `<span class="badge status">${esc(value)}</span>`;
   function node(tag, text, className) { const el = document.createElement(tag); if (className) el.className = className; if (text != null) el.textContent = text; return el; }
   function safeFragment(markup) { const template = document.createElement("template"); template.innerHTML = markup; return template.content; }
+  function csrfToken() { const item = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("sf_csrf=")); return item ? decodeURIComponent(item.slice(8)) : ""; }
   async function request(path, options) {
+    const baseHeaders = Object.assign({ Accept: "application/json" }, state.accessToken ? { Authorization: `Bearer ${state.accessToken}` } : {});
+    if (options && options.method && options.method !== "GET") baseHeaders["X-CSRF-Token"] = csrfToken();
     let response;
-    try { response = await fetch(path, options); } catch (error) { throw new Error("API unavailable. Start `python -m sentinelforge serve` and refresh."); }
+    try { response = await fetch(path, Object.assign({ credentials: "same-origin", headers: baseHeaders }, options || {})); } catch (error) { throw new Error("API unavailable. Start `python -m sentinelforge serve` and refresh."); }
     let body;
     try { body = await response.json(); } catch (error) { throw new Error("The API returned invalid JSON."); }
-    if (!response.ok) throw new Error(body && body.error ? body.error : `API request failed (${response.status}).`);
+    if (!response.ok) { const error = new Error(body && body.error ? body.error : `API request failed (${response.status}).`); error.status = response.status; if (response.status === 401) handleSessionExpired(); if (response.status === 403) showMessage("You do not have permission to perform this action."); throw error; }
     return body;
   }
-  const api = { health: () => request("/health"), runs: (limit) => request(`/runs${limit ? `?limit=${limit}` : ""}`), alerts: (severityValue) => request(`/alerts${severityValue ? `?severity=${encodeURIComponent(severityValue)}` : ""}`), incidents: (severityValue) => request(`/incidents${severityValue ? `?severity=${encodeURIComponent(severityValue)}` : ""}`), investigations: () => request("/investigations"), detail: (resource, id) => request(`/${resource}/${encodeURIComponent(id)}`), analyze: (body) => request("/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) };
+  function payloadValue(body, key, fallback) { if (body && body[key] !== undefined) return body[key]; if (body && body.data && body.data[key] !== undefined) return body.data[key]; return fallback; }
+  function normalizeUser(body) { const user = body && (body.user || body.data && (body.data.user || body.data) || body); return user && typeof user === "object" && (user.username || user.name || user.user_id || user.id || user.role) ? user : null; }
+  function normalizeList(body, key) { const value = payloadValue(body, key, body); return Array.isArray(value) ? value : []; }
+  const api = { health: () => request("/health"), me: () => request("/auth/me"), login: (body) => request("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), logout: () => request("/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }), users: () => request("/users"), audit: () => request("/audit"), runs: (limit) => request(`/runs${limit ? `?limit=${limit}` : ""}`), alerts: (severityValue) => request(`/alerts${severityValue ? `?severity=${encodeURIComponent(severityValue)}` : ""}`), incidents: (severityValue) => request(`/incidents${severityValue ? `?severity=${encodeURIComponent(severityValue)}` : ""}`), investigations: () => request("/investigations"), detail: (resource, id) => request(`/${resource}/${encodeURIComponent(id)}`), analyze: (body) => request("/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) };
   function showMessage(message) { $("global-message").textContent = message; $("global-message").classList.remove("hidden"); }
   function clearMessage() { $("global-message").classList.add("hidden"); }
+  function handleSessionExpired() { state.user = null; $("current-user").textContent = "Session expired"; $("logout-btn").classList.add("hidden"); showMessage("Your session has expired. Sign in again to continue."); showLogin(); }
+  function showLogin() { $("login-view").classList.remove("hidden"); document.querySelectorAll(".page").forEach((el) => el.classList.add("hidden")); }
+  function setUser(user) { state.user = user; $("current-user").textContent = user ? `${user.username || user.name || "User"} · ${user.role || ""}` : "Local session"; $("logout-btn").classList.toggle("hidden", !user); document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !user || user.role !== "admin")); const panel = $("analyze-form").closest(".analyze-panel"); if (panel) panel.classList.toggle("hidden", !!user && user.role === "viewer"); $("login-view").classList.toggle("hidden", !!user); if (user) document.querySelectorAll(".page").forEach((el) => el.classList.remove("hidden")); }
   async function load() {
     try {
-      const [health, runs, alerts, incidents, investigations] = await Promise.all([api.health(), api.runs(20), api.alerts(), api.incidents(), api.investigations()]);
+      const [health, runsResponse, alertsResponse, incidentsResponse, investigationsResponse] = await Promise.all([api.health(), api.runs(20), api.alerts(), api.incidents(), api.investigations()]);
+       const runs = normalizeList(runsResponse, "runs"); const alerts = normalizeList(alertsResponse, "alerts"); const incidents = normalizeList(incidentsResponse, "incidents"); const investigations = normalizeList(investigationsResponse, "investigations");
       $("api-status").textContent = "API reachable"; $("api-status").className = "status-dot available";
       state.data = { runs, alerts, incidents, investigations }; clearMessage(); renderAll();
     } catch (error) { $("api-status").textContent = "API unavailable"; $("api-status").className = "status-dot unavailable"; showMessage(error.message); renderAll(); }
@@ -47,5 +57,7 @@
   function showPage(page) { state.page = page; document.querySelectorAll(".page").forEach((el) => el.classList.toggle("active", el.id === `page-${page}`)); document.querySelectorAll(".nav-item").forEach((el) => el.classList.toggle("active", el.dataset.page === page)); $("main").focus(); }
   document.querySelectorAll(".nav-item,[data-page-link]").forEach((el) => el.addEventListener("click", () => showPage(el.dataset.page || el.dataset.pageLink)));
   $("refresh-btn").addEventListener("click", load); $("alert-severity").addEventListener("change", renderAlerts); $("alert-rule").addEventListener("input", renderAlerts); $("incident-severity").addEventListener("change", renderIncidents); $("modal-close").addEventListener("click", () => $("detail-modal").classList.add("hidden")); $("detail-modal").addEventListener("click", (event) => { if (event.target === $("detail-modal")) $("detail-modal").classList.add("hidden"); }); document.addEventListener("keydown", (event) => { if (event.key === "Escape") $("detail-modal").classList.add("hidden"); }); $("analyze-form").addEventListener("submit", async (event) => { event.preventDefault(); const form = new FormData(event.target); const body = {}; for (const [key, value] of form.entries()) if (value) body[key] = value; $("analyze-result").classList.remove("hidden"); $("analyze-result").textContent = "Running analysis…"; try { const result = await api.analyze(body); $("analyze-result").textContent = `Analysis complete: ${result.alerts.length} alerts, ${result.incidents.length} incidents, ${result.investigations.length} investigations.`; await load(); } catch (error) { $("analyze-result").textContent = error.message; } });
-  load();
+  $("login-form").addEventListener("submit", async (event) => { event.preventDefault(); const form = new FormData(event.target); const message = $("login-message"); message.classList.remove("hidden"); message.textContent = "Signing in…"; try { const user = await api.login({ username: form.get("username"), password: form.get("password") }); event.target.reset(); message.classList.add("hidden"); state.accessToken = user && (user.access_token || user.token || user.data && (user.data.access_token || user.data.token)) || null; setUser(normalizeUser(user)); await load(); } catch (error) { message.textContent = error.status === 401 ? "Invalid username or password." : error.message; } });
+  $("logout-btn").addEventListener("click", async () => { try { await api.logout(); } catch (_) {} state.accessToken = null; setUser(null); showLogin(); });
+  api.me().then((user) => { const currentUser = normalizeUser(user); if (!currentUser) throw Object.assign(new Error("Authentication required."), { status: 401 }); setUser(currentUser); load(); }).catch(() => { setUser(null); showLogin(); });
 }());
