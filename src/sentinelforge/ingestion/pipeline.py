@@ -14,6 +14,7 @@ from ..parsers.system_persistence import parse_lines as parse_persistence_lines
 from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
 from ..parsers.file_activity import parse_lines as parse_file_activity_lines, parse_file as parse_file_activity_file
 from ..parsers.registry import parse_lines as parse_registry_lines, parse_file as parse_registry_file
+from ..parsers.windows_system import parse_lines as parse_windows_system_lines, parse_file as parse_windows_system_file
 from .reader import SourcePath, read_lines, read_sources
 
 
@@ -40,6 +41,8 @@ def parser_for_source(source: str) -> LineParser:
         return parse_network_lines
     if source in {"registry_change", "registry"}:
         return parse_registry_lines
+    if source == "windows_system_event":
+        return parse_windows_system_lines
     raise ValueError(f"unsupported source: {source}")
 
 
@@ -67,6 +70,9 @@ def ingest_file(source_path: SourcePath, parser: LineParser = parse_lines, sourc
         return IngestionResult(events=events, diagnostics=diagnostics)
     if source == "registry_change" and parser is parse_lines:
         events, diagnostics = parse_registry_file(source_path)
+        return IngestionResult(events=events, diagnostics=diagnostics)
+    if source == "windows_system_event" and parser is parse_lines:
+        events, diagnostics = parse_windows_system_file(source_path)
         return IngestionResult(events=events, diagnostics=diagnostics)
     if parser is parse_lines and source != "linux_auth":
         parser = parser_for_source(source)

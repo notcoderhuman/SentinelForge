@@ -43,7 +43,9 @@ def _event(data: Dict[str, Any]) -> SecurityEvent:
         old_path=data.get("old_path"), size=data.get("size"),
          hive=data.get("hive"), key_path=data.get("key_path"), registry_action=data.get("registry_action"),
          value_name=data.get("value_name"), value_data=data.get("value_data"), value_type=data.get("value_type"),
-         old_key_path=data.get("old_key_path"))
+         old_key_path=data.get("old_key_path"), provider=data.get("provider"),
+         system_event_id=data.get("system_event_id"), system_action=data.get("system_action"),
+         service_name=data.get("service_name"), service_state=data.get("service_state"))
 
 def _evidence(data: Dict[str, Any]) -> Evidence:
     return Evidence(data["evidence_id"], _event(data["event"]), data["evidence_type"],

@@ -82,6 +82,7 @@ class DetectionEngine:
             alerts.extend(self._sensitive_file_activity(ordered_events, threat_context))
         alerts.extend(self._event_correlations(ordered_events))
         alerts.extend(self._registry_detections(ordered_events))
+        alerts.extend(self._windows_system_detections(ordered_events))
         alerts.extend(self._persistence_detections(ordered_events))
         unique = {alert.alert_id: alert for alert in alerts}
         return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
@@ -721,6 +722,45 @@ class DetectionEngine:
             "hklm\\software\\microsoft\\windows\\currentversion\\run",
             "hklm\\software\\microsoft\\windows\\currentversion\\runonce",
         }
+
+    def _windows_system_detections(self, events: Sequence[SecurityEvent]) -> List[Alert]:
+        alerts: List[Alert] = []
+        system = [event for event in events if event.event_type == "windows_system_event" and event.source == "windows_system_event"]
+        service_providers = {"service control manager", "scm", "microsoft-windows-service control manager"}
+        states = {"running", "stopped", "start_pending", "stop_pending"}
+        configuration_actions = {"configure", "configuration", "change", "changed", "create", "created", "update", "updated", "set", "modify", "modified", "configuration_change", "config_change"}
+
+        def is_service(event: SecurityEvent) -> bool:
+            return bool(event.provider and event.provider.strip().lower() in service_providers)
+
+        def emit(rule_id: str, evidence: Sequence[SecurityEvent], text: str) -> None:
+            definition = self.registry.get(rule_id)
+            if definition.enabled:
+                ordered = sorted(evidence, key=lambda item: (item.timestamp, item.raw))
+                alerts.append(create_alert(rule_id, definition.severity, definition.name + " observed.", text, ordered))
+
+        for event in system:
+            state = (event.service_state or "").strip().lower()
+            if is_service(event) and event.service_name and state in states:
+                emit("WINDOWS_SERVICE_STATE_CHANGE", [event], "An explicit Windows service state was reported.")
+            if is_service(event) and event.service_name and state == "stopped":
+                emit("WINDOWS_SERVICE_STOPPED", [event], "An explicit Windows service stopped state was reported.")
+            if event.command and event.provider and event.system_event_id is not None and (event.system_action or "").strip().lower() in configuration_actions:
+                emit("WINDOWS_SYSTEM_EVENT_WITH_COMMAND", [event], "An explicit configuration-related Windows system event included a command.")
+
+        window = timedelta(seconds=self.config.windows_service_correlation_window_seconds)
+        service_events = [event for event in system if is_service(event) and event.hostname and event.service_name]
+        for stopped in service_events:
+            if (stopped.service_state or "").strip().lower() != "stopped":
+                continue
+            for running in service_events:
+                if ((running.service_state or "").strip().lower() == "running"
+                        and running.hostname == stopped.hostname
+                        and running.service_name == stopped.service_name
+                        and timedelta(0) <= running.timestamp - stopped.timestamp <= window):
+                    emit("WINDOWS_SERVICE_START_AFTER_STOP", [stopped, running], "An explicit running service state followed a stopped state within the configured window.")
+        unique = {alert.alert_id: alert for alert in alerts}
+        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     def _persistence_detections(self, events: Sequence[SecurityEvent]) -> List[Alert]:
         """Detect only explicit system-persistence records and relationships."""

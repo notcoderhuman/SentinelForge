@@ -1,0 +1,4 @@
+{"timestamp":"2025-01-24T00:00:00Z","hostname":"win-host","event_id":7036,"provider":"Service Control Manager","action":"state_change","service_name":"ExampleSvc","service_state":"running","message":"service reported running"}
+{"timestamp":"2025-01-24T00:01:00Z","hostname":"win-host","event_id":7036,"provider":"Service Control Manager","action":"state_change","service_name":"ExampleSvc","service_state":"stopped","message":"service reported stopped"}
+{"timestamp":"2025-01-24T00:02:00Z","hostname":"win-host","event_id":7036,"provider":"Service Control Manager","action":"state_change","service_name":"ExampleSvc","service_state":"running","message":"service reported running"}
+{"timestamp":"2025-01-24T00:03:00Z","hostname":"win-host","event_id":7040,"provider":"Service Control Manager","action":"configuration_change","service_name":"ExampleSvc","service_state":"running","command":"sc.exe config ExampleSvc start=auto","message":"service configuration reported"}

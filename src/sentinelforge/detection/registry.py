@@ -231,6 +231,26 @@ DEFAULT_RULE_REGISTRY = RuleRegistry((
         ("five distinct process names for one hostname and key path within inclusive 120 seconds",),
     ),
     RuleDefinition(
+        "WINDOWS_SERVICE_STATE_CHANGE", "Windows service state change",
+        "An explicit Windows service state was reported.", "low", 1, True,
+        ("one Windows system event with explicit service provider, name, and supported state",),
+    ),
+    RuleDefinition(
+        "WINDOWS_SERVICE_STOPPED", "Windows service stopped",
+        "An explicit Windows service stopped state was reported.", "medium", 1, True,
+        ("one Windows system event with explicit service provider, service name, and stopped state",),
+    ),
+    RuleDefinition(
+        "WINDOWS_SERVICE_START_AFTER_STOP", "Windows service start after stop",
+        "An explicit running service state followed a stopped state.", "medium", 300, True,
+        ("matching hostname and service name with stopped then running within 300 seconds",),
+    ),
+    RuleDefinition(
+        "WINDOWS_SYSTEM_EVENT_WITH_COMMAND", "Windows system event with command",
+        "An explicit configuration-related Windows system event included a command.", "medium", 1, True,
+        ("one Windows system event with explicit provider, event ID, configuration action, and command",),
+    ),
+    RuleDefinition(
         "AUTHENTICATION_TO_NETWORK_ACTIVITY",
         "Authentication to network activity",
         "A successful authentication is followed by network activity for the same explicit user and host.",

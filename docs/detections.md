@@ -5,6 +5,38 @@ algorithms remain readable Python functions. Rule definitions do not execute cod
 and `rules/auth_rules.yaml` remains reference metadata only.
 
 
+## WINDOWS_SERVICE_STATE_CHANGE
+
+- **Purpose:** report an explicit supported Windows service state.
+- **Evidence:** one `windows_system_event` with a service provider, service name, and `running`, `stopped`, `start_pending`, or `stop_pending` state.
+- **Severity:** `low`.
+- **Limitations:** reports telemetry only and does not establish success, execution, persistence, maliciousness, or attribution.
+- **ATT&CK:** No mapping.
+
+## WINDOWS_SERVICE_STOPPED
+
+- **Purpose:** report an explicit stopped service state.
+- **Evidence:** one service event with an explicit service name and `stopped` state.
+- **Severity:** `medium`.
+- **Limitations:** does not claim the service was maliciously stopped.
+- **ATT&CK:** No mapping.
+
+## WINDOWS_SERVICE_START_AFTER_STOP
+
+- **Purpose:** identify an explicit stopped-to-running service sequence.
+- **Evidence:** same exact hostname and service name, stopped followed by running within an inclusive 300-second window.
+- **Severity:** `medium`.
+- **Limitations:** missing identities and `start_pending` do not match; no execution or persistence is inferred.
+- **ATT&CK:** No mapping.
+
+## WINDOWS_SYSTEM_EVENT_WITH_COMMAND
+
+- **Purpose:** report command-bearing configuration-related Windows system telemetry.
+- **Evidence:** explicit provider, event ID, configuration-related action, and non-empty command.
+- **Severity:** `medium`.
+- **Limitations:** command content is inert evidence; no execution, maliciousness, persistence, or compromise is inferred.
+- **ATT&CK:** No mapping.
+
 ## SSH_BRUTE_FORCE
 
 - **Purpose:** identify a possible burst of failed SSH authentication.

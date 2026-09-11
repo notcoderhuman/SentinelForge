@@ -8,7 +8,7 @@ from .reporting import analyze_file
 from .storage import AnalysisRepository, Database
 
 _ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
-_ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry"})
+_ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry", "windows_system_event"})
 
 
 def analyze_request(path: str, source: str = "linux_auth", severity: Optional[str] = None,

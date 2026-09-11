@@ -55,3 +55,5 @@ class RuleConfig:
     # Phase 23 registry telemetry detections.
     registry_activity_threshold: int = 5
     registry_activity_window_seconds: int = 120
+    # Phase 24 Windows system-event detections.
+    windows_service_correlation_window_seconds: int = 300
