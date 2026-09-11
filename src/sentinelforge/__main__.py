@@ -16,6 +16,7 @@ from .observable_engine import extract_observables
 from .reporting import analyze_file, render_human_report
 from .threat_context_engine import load_context
 from .replay import evaluate, explain_alert, load_expected, replay_file
+from .investigation_package import build_package
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -38,6 +39,10 @@ def _build_parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("--source", choices=source_choices, default="linux_auth")
     replay_parser.add_argument("--expected")
     replay_parser.add_argument("--json", action="store_true")
+    package_parser = subparsers.add_parser("package")
+    package_parser.add_argument("path")
+    package_parser.add_argument("--source", choices=source_choices, default="linux_auth")
+    package_parser.add_argument("--json", action="store_true")
     history_parser = subparsers.add_parser("history")
     history_parser.add_argument("--database", required=True, help="local SQLite database path")
     serve_parser = subparsers.add_parser("serve")
@@ -108,6 +113,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 metrics = output["evaluation"]["metrics"]
                 print(f"Evaluation: precision={metrics['precision']:.3f} recall={metrics['recall']:.3f}")
         return 1 if evaluation_failed else 0
+    if arguments.command == "package":
+        from .ingestion.pipeline import IngestionResult, ingest_file
+        try:
+            result: IngestionResult = ingest_file(arguments.path, source=arguments.source)
+            alerts = DetectionEngine().detect(result.events)
+            package = build_package(alerts, [d.to_dict() for d in result.diagnostics])
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"package error: {exc}") from exc
+        if arguments.json:
+            print(json.dumps(package.to_dict(), indent=2, sort_keys=True))
+        else:
+            print(f"Package: {package.package_id}")
+            print(f"Alerts: {len(package.alerts)}, Evidence items: {len(package.evidence)}, Diagnostics: {len(package.diagnostics)}")
+        return 0
     if arguments.command == "history":
         from .storage import AnalysisRepository, Database
         with Database(arguments.database) as db:

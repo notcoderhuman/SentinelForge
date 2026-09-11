@@ -105,9 +105,71 @@ The `registry_change` source accepts newline-delimited JSON registry-change reco
 
 The `windows_system_event` source accepts newline-delimited JSON and is additive to, rather than a replacement for, the Windows Security XML parser covering authentication events 4624, 4625, and 4672. Required fields are timestamp, hostname, event ID, provider, and action. Optional username, process, executable, service, state, command, and message fields use explicit normalized values; service names are stripped without case folding or alias invention. Four standalone observations cover supported service states, stopped services, stopped-to-running service relationships within an inclusive 300-second window, and configuration-related events with an explicit command. Alerts are unmapped to ATT&CK and do not infer execution, persistence, compromise, maliciousness, or attribution. Records remain inert evidence; no Windows Event Log API, PowerShell, WMI, subprocess, or live host access is used. Windows system events are isolated from all existing cross-source correlations and round-trip through the optional SQLite payload repository.
 
-## Phase 25 deterministic replay boundary
+## Phase 26 Investigation Package boundary
 
-The replay component accepts normalized events or an explicitly selected existing telemetry file, then invokes the existing `DetectionEngine` without duplicating rule evaluation or mutating events. Expected results use an `alerts` list containing `rule_id`, `severity`, and non-negative `count`, with optional stable alert/evidence IDs. Evaluation compares these stable properties and reports matches, omissions, unexpected alerts, rule breakdowns, and corpus-level precision/recall metrics. Zero denominators produce 0.0; no accuracy metric is calculated without explicit negative samples. Explanations expose rule identity and concrete evidence IDs with deterministic text derived from the alert. CLI schema/input errors are reported as concise nonzero replay errors, and an expected-result mismatch returns nonzero for automation. Replay timing is observational only and is not a production benchmark. Results remain ephemeral and no persistence schema changes are made.
+Phase 26 adds the Investigation Package — a deterministic boundary between detection and any future analyst/LLM consumer. The package is a self-contained, immutable, machine-readable structure capturing one incident's alerts, evidence, provenance, diagnostics, and chronology. It is produced by `build_package(alerts, diagnostics, incident)` or the CLI command `sentinelforge package <input> --source <source> --json`.
+
+### Package schema
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `package_version` | string | Schema version (currently `"1"`) |
+| `package_id` | string | 16-hex-char SHA-256 of stable content only |
+| `generated_at` | string | UTC ISO-8601 timestamp (not in identity hash) |
+| `incident` | dict or null | Embedded incident metadata when available |
+| `alerts` | list of alert objects | Sorted by `(timestamp, alert_id)` |
+| `evidence` | list of evidence objects | Deduplicated, sorted by `(timestamp, evidence_id)` |
+| `diagnostics` | list of diagnostic objects | Parser rejections and ingestion failures |
+| `chronology` | list of chronology entries | Deterministic timestamp-ordered sequence |
+| `coverage` | coverage summary | Explicit counts and metadata |
+
+### Canonical evidence identity
+
+Every evidence item in a package has a stable `evidence_id`:
+
+- If the source event already carries a non-empty `event_id`, it is preserved unchanged.
+- Otherwise, a 16-hex-char SHA-256 digest of the canonicalized event content (timestamp, event type, source, hostname, username, message, raw) is generated. This digest is independent of array position, runtime IDs, input ordering, and generation metadata.
+
+### Provenance model
+
+Each evidence item records its telemetry `source` (e.g., `"linux-auth"`, `"network_connection"`). Each alert item records two provenance fields:
+
+| Field | Description |
+|-------|-------------|
+| `detection_source` | The legacy alert `source` field (the rule family). |
+| `contributing_sources` | *All* distinct telemetry sources present in the alert's evidence, sorted deterministically. This fixes the Phase 25 issue where cross-source alerts carried only a single source label. |
+
+### Diagnostics / coverage semantics
+
+Parser rejections are preserved as `PackageDiagnostic` objects with `telemetry_was_accepted: false`. The coverage summary reports explicit counts — no single "quality score" is computed. Contact coverage categories are:
+
+- `no telemetry observed` — implicit (no evidence item in package)
+- `telemetry received but rejected` — explicit diagnostic item
+- `telemetry accepted with no alert` — implicit (evidence item exists without matching alert reference)
+
+### Chronology ordering
+
+The chronology is sorted by (1) timestamp ascending, (2) kind (`"evidence"` before `"alert"` for identical timestamps), (3) identifier as tie-breaker. This ordering is independent of input sequence.
+
+### Canonical serialization
+
+All list fields are sorted deterministically. `generated_at` is included in `to_dict()` but excluded from the `package_id` hash input. Repeated `to_dict()` calls on the same package produce identical output.
+
+### Package identity
+
+The `package_id` is a 16-hex-char SHA-256 digest of the serialized `package_version`, `incident`, `alerts`, `evidence`, `diagnostics`, and `chronology` — an ephemeral field. Changing any alert or evidence content changes the ID. Reordering equivalent input does not change the ID.
+
+### Legacy null-ID handling
+
+The Phase 25 LLM experiment exposed that alerts from certain sources (e.g., `linux-auth`) contain `null` evidence IDs. The Investigation Package resolves every `null` to a deterministic hash-based `evidence_id` at the package layer. The original alert objects are not modified.
+
+### No security claims
+
+The package is a deterministic representation of available evidence. It does not establish compromise, malware, attacker attribution, or intent. This is stated explicitly in the serialized output and in the documentation.
+
+## Phase 27 and beyond
+
+Phase 27 is not yet implemented. Future phases may add LLM analyst integration over the Investigation Package boundary, but the package itself is designed to be useful without any AI.
 
 ## Local HTTP API boundary
 

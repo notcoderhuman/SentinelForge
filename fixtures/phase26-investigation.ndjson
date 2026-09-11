@@ -1,0 +1,6 @@
+2025-06-15T09:00:00Z acme-ws-02 sshd[2000]: Accepted password for jdoe from 10.0.1.101 port 52001 ssh2
+2025-06-15T09:00:05Z acme-ws-02 sshd[2000]: Failed password for jdoe from 10.0.1.101 port 52002 ssh2
+2025-06-15T09:00:10Z acme-ws-02 sshd[2000]: Failed password for jdoe from 10.0.1.101 port 52003 ssh2
+2025-06-15T09:00:15Z acme-ws-02 sshd[2000]: Failed password for jdoe from 10.0.1.101 port 52004 ssh2
+2025-06-15T09:00:20Z acme-ws-02 sshd[2000]: Accepted password for jdoe from 10.0.1.101 port 52005 ssh2
+Here is a malformed line that should be rejected
