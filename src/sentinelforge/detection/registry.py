@@ -28,6 +28,18 @@ class RuleRegistry:
 
 
 DEFAULT_RULE_REGISTRY = RuleRegistry((
+    RuleDefinition("OUTBOUND_CONNECTION_TO_SUSPICIOUS_IP", "Outbound connection to suspicious IP",
+                   "An outbound network connection reached an IP address explicitly marked suspicious by local threat context.", "medium", 1, True,
+                   ("one outbound network event whose destination IP matches suspicious local threat context",)),
+    RuleDefinition("REPEATED_CONNECTION_TO_SAME_DESTINATION", "Repeated connection to the same destination",
+                   "Repeated outbound connections to one destination within a bounded window.", "low", 120, True,
+                   ("five network connection events to one destination within 120 seconds",)),
+    RuleDefinition("SOURCE_CONTACTS_MANY_DESTINATIONS", "Source contacts many destinations",
+                   "One source contacts multiple destinations within a bounded window.", "medium", 120, True,
+                   ("five network connection events from one source to distinct destinations within 120 seconds",)),
+    RuleDefinition("DESTINATION_CONTACTED_BY_MANY_SOURCES", "Destination contacted by many sources",
+                   "One destination is contacted by multiple sources within a bounded window.", "medium", 120, True,
+                   ("five network connection events from distinct sources to one destination within 120 seconds",)),
     RuleDefinition("REPEATED_AUTH_FAILURE", "Repeated authentication failure",
                    "Repeated failures for one account within a bounded window.", "medium", 120, True,
                    ("three authentication_failure events for one username",)),

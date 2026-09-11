@@ -25,6 +25,14 @@ class SecurityEvent:
     message: str
     raw: str
     event_id: Optional[str] = None
+    # Network-specific normalized attributes.  They are optional so existing
+    # source parsers and callers remain backwards compatible.
+    source_port: Optional[int] = None
+    destination_ip: Optional[str] = None
+    destination_port: Optional[int] = None
+    protocol: Optional[str] = None
+    process_name: Optional[str] = None
+    direction: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.timestamp.tzinfo is None:
@@ -38,4 +46,7 @@ class SecurityEvent:
         values["timestamp"] = self.timestamp.isoformat().replace("+00:00", "Z")
         if self.event_id is None:
             values.pop("event_id")
+        for field in ("source_port", "destination_ip", "destination_port", "protocol", "process_name", "direction"):
+            if values[field] is None:
+                values.pop(field)
         return values

@@ -7,7 +7,7 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from sentinelforge.api.server import MAX_BODY_BYTES, SentinelHTTPServer
+from sentinelforge.api.server import ALLOWED_SOURCES, MAX_BODY_BYTES, SentinelHTTPServer
 from sentinelforge.auth.service import AuthService
 from sentinelforge.storage import Database
 
@@ -36,6 +36,9 @@ class ThreadSafeAuthServer(SentinelHTTPServer):
 
 
 class ApiTests(unittest.TestCase):
+    def test_source_allowlist_is_explicit_and_network_enabled(self):
+        self.assertEqual(ALLOWED_SOURCES, frozenset({"linux_auth", "windows_security", "network_connection"}))
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.database = str(Path(self.directory.name) / "analysis.db")
@@ -121,6 +124,8 @@ class ApiTests(unittest.TestCase):
     def test_invalid_requests(self):
         self.assertEqual(self.request("POST", "/analyze", {"source": "linux_auth"})[0], 400)
         self.assertEqual(self.request("POST", "/analyze", {"path": "fixtures/auth.log", "source": "bad"})[0], 400)
+        self.assertEqual(self.request("POST", "/analyze", {"path": "fixtures/auth.log", "source": "network"})[0], 400)
+        self.assertEqual(self.request("POST", "/analyze", {"path": "fixtures/auth.log", "source": "network_connection", "unexpected": True})[0], 400)
         self.assertEqual(self.request("GET", "/alerts?severity=bad")[0], 400)
         self.assertEqual(self.request("GET", "/runs?limit=bad")[0], 400)
         self.assertEqual(self.request("PUT", "/health")[0], 405)

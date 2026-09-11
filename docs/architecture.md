@@ -36,6 +36,18 @@ correlation, risk, incident, or investigation logic. Persistence is idempotent b
 stable entity IDs and does not perform cross-run correlation. The database path is
 always explicitly supplied by `--database`.
 
+## Phase 17 network telemetry boundary
+
+The `network_connection` source accepts one JSON object per line with required
+`timestamp`, `source_ip`, `source_port`, `destination_ip`, `destination_port`,
+and `protocol` fields, plus optional process, username, and direction fields.
+Malformed records become diagnostics while valid records continue through the
+existing normalized event, detection, alert, incident, investigation, evidence,
+and risk pipeline. Network rules use deterministic 120-second windows and report
+only observed connection patterns. Suspicious IP matching reuses the existing
+local threat-context file; no network access, reputation lookup, malware claim,
+or code execution is performed.
+
 ## Local HTTP API boundary
 
 Phase 14 adds a standard-library `http.server` interface in `sentinelforge.api`.

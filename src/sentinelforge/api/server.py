@@ -28,7 +28,7 @@ STATIC_FILES = {
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
 }
-ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security"})
+ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security", "network_connection"})
 ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 
 

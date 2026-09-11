@@ -65,6 +65,7 @@ python -m sentinelforge analyze fixtures/auth.log --json
 python -m sentinelforge analyze fixtures/auth.log --severity high
 python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security
 python -m sentinelforge analyze fixtures/windows-security.xml --source windows_security --json
+python -m sentinelforge analyze fixtures/network-phase17.ndjson --source network_connection --json
 python -m sentinelforge analyze fixtures/auth.log --database data/sentinelforge.db
 python -m sentinelforge history --database data/sentinelforge.db
 python -m sentinelforge serve --host 127.0.0.1 --port 8765 --database data/sentinelforge.db
@@ -86,4 +87,4 @@ Tests use only in-memory strings and repository fixtures; pytest is not required
 
 ## Security scope and limitations
 
-This is defensive software for learning and portfolio demonstration. Alerts describe observed evidence and cautious interpretations; failed and successful authentication patterns do not prove compromise. Input formats are intentionally narrow, timestamp handling is fixture-specific, and the project does not ingest every Linux distribution's auth format. Do not commit real logs, credentials, or secrets.
+This is defensive software for learning and portfolio demonstration. Alerts describe observed evidence and cautious interpretations; failed and successful authentication patterns do not prove compromise. Input formats are intentionally narrow, timestamp handling is fixture-specific, and the project does not ingest every Linux distribution's auth format. Network telemetry is line-oriented JSON, uses exact local threat-context matches only, and reports observed connection patterns without labeling them as malware or command-and-control. It performs no network access or code execution. Do not commit real logs, credentials, or secrets.

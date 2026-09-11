@@ -25,14 +25,16 @@ def extract_observables(events: Iterable[SecurityEvent]) -> List[Observable]:
     """Extract supported observables without modifying source events."""
     extracted: dict[tuple[str, str, str], Observable] = {}
     for event in events:
-        if event.source_ip:
-            try:
-                address = ipaddress.ip_address(event.source_ip)
-            except ValueError:
-                address = None
-            if address is not None:
-                address_type = "ipv4" if address.version == 4 else "ipv6"
-                _add_observable(extracted, event, address_type, event.source_ip, "event.source_ip")
+        for field_name, provenance in (("source_ip", "event.source_ip"), ("destination_ip", "event.destination_ip")):
+            address_value = getattr(event, field_name, None)
+            if address_value:
+                try:
+                    address = ipaddress.ip_address(address_value)
+                except ValueError:
+                    address = None
+                if address is not None:
+                    address_type = "ipv4" if address.version == 4 else "ipv6"
+                    _add_observable(extracted, event, address_type, str(address), provenance)
         if event.username:
             _add_observable(extracted, event, "username", event.username, "event.username")
         for match in URL_PATTERN.finditer(event.message):

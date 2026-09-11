@@ -46,8 +46,8 @@ def analyze_file(path: str, severity: Optional[str] = None,
     ingestion_result = ingest_file(path, source=source)
     events = ingestion_result.events
     diagnostics = ingestion_result.diagnostics
-    all_alerts = DetectionEngine().detect(events)
     context = load_context(DEFAULT_CONTEXT_PATH)
+    all_alerts = DetectionEngine().detect(events, context)
     all_incidents = derive_incidents(all_alerts, context)
     all_investigations = [create_investigation(incident) for incident in all_incidents]
     if database:

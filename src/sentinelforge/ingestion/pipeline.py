@@ -7,6 +7,7 @@ from typing import Callable, Iterable, List, Sequence, Tuple
 
 from ..events import SecurityEvent
 from ..parsers.linux_auth import ParseDiagnostic, parse_lines
+from ..parsers.network import parse_lines as parse_network_lines
 from ..parsers.windows_security import parse_events as parse_windows_events, parse_file as parse_windows_file
 from .reader import SourcePath, read_lines, read_sources
 
@@ -20,6 +21,10 @@ def parser_for_source(source: str) -> LineParser:
         return parse_lines
     if source == "windows_security":
         return parse_windows_events
+    if source == "network_connection":
+        return parse_network_lines
+    if source == "network":
+        return parse_network_lines
     raise ValueError(f"unsupported source: {source}")
 
 
@@ -39,12 +44,11 @@ def ingest_lines(lines: Iterable[str], parser: LineParser = parse_lines) -> Inge
 
 def ingest_file(source_path: SourcePath, parser: LineParser = parse_lines, source: str = "linux_auth") -> IngestionResult:
     """Read one local source and pass its lines to the selected parser."""
-    if parser is parse_lines and source != "linux_auth":
-        with open(source_path, "r", encoding="utf-8", errors="replace") as input_file:
-            return ingest_lines([input_file.read()], parser=parser_for_source(source))
     if source == "windows_security":
         events, diagnostics = parse_windows_file(source_path)
         return IngestionResult(events=events, diagnostics=diagnostics)
+    if parser is parse_lines and source != "linux_auth":
+        parser = parser_for_source(source)
     return ingest_lines(read_lines(source_path), parser=parser)
 
 
