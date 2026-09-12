@@ -1,0 +1,27 @@
+"use strict";
+const assert = require("assert");
+const helpers = require("../web/app-helpers.js");
+
+assert.deepStrictEqual(helpers.nextIncidentStatuses("open"), ["investigating", "resolved"]);
+assert.deepStrictEqual(helpers.nextIncidentStatuses("closed"), []);
+assert.deepStrictEqual(helpers.nextInvestigationStatuses("active"), ["completed"]);
+assert.deepStrictEqual(helpers.nextInvestigationStatuses("completed"), []);
+assert.strictEqual(helpers.utf8ByteLength("a".repeat(16384)), 16384);
+assert.strictEqual(helpers.validateNoteContent("a".repeat(16384)).valid, true);
+assert.strictEqual(helpers.validateNoteContent("a".repeat(16385)).valid, false);
+assert.strictEqual(helpers.utf8ByteLength("🙂"), 4);
+assert.strictEqual(helpers.validateNoteContent("🙂".repeat(4096)).valid, true);
+assert.strictEqual(helpers.validateNoteContent("🙂".repeat(4097)).valid, false);
+const query = helpers.queryString({ severity: "high", rule_id: "A&B", empty: "", limit: 10 });
+assert.strictEqual(query, "?severity=high&rule_id=A%26B&limit=10");
+assert.strictEqual((query.match(/(?:\?|&)severity=/g) || []).length, 1);
+assert.strictEqual(helpers.queryString({}), "");
+assert.strictEqual(helpers.errorMessage(401), "Session/authentication required.");
+assert.strictEqual(helpers.errorMessage(403), "You are not permitted to perform that request.");
+assert.strictEqual(helpers.errorMessage(404), "The case no longer exists.");
+assert.strictEqual(helpers.errorMessage(409), "The case state changed or that transition is invalid.");
+assert.strictEqual(helpers.errorMessage(413), "The note or request body is too large.");
+assert.strictEqual(helpers.errorMessage(500), "The server encountered an internal error.");
+assert.strictEqual(helpers.errorMessage(503), "The database is temporarily unavailable.");
+assert.strictEqual(helpers.errorMessage(418), "The request could not be completed.");
+console.log("frontend helper validation passed");
