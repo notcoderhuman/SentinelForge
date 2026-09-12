@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import secrets
 import threading
 import time
@@ -30,6 +31,18 @@ STATIC_FILES = {
 }
 ALLOWED_SOURCES = frozenset({"linux_auth", "windows_security", "network_connection", "process_execution", "dns_query", "file_activity", "system_persistence", "registry_change", "registry", "windows_system_event"})
 ALLOWED_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+ALLOWED_STATUSES = frozenset({"open", "investigating", "resolved", "closed", "active", "completed"})
+RESOURCE_STATUSES = {
+    "/incidents": frozenset({"open", "investigating", "resolved", "closed"}),
+    "/investigations": frozenset({"active", "completed"}),
+}
+QUERY_LIMIT_MAX = 1000
+QUERY_FIELDS = {
+    "/alerts": frozenset({"severity", "rule_id", "source", "run_id", "since", "until", "limit"}),
+    "/incidents": frozenset({"severity", "status", "risk_level", "min_risk_score", "max_risk_score", "run_id", "since", "until", "limit"}),
+    "/investigations": frozenset({"status", "incident_id", "since", "until", "limit"}),
+    "/runs": frozenset({"source", "since", "until", "limit"}),
+}
 
 
 def _safe_input_path(value: Any) -> str:
@@ -77,9 +90,9 @@ class ApiOperations:
     def __init__(self, database: Optional[str]) -> None:
         self.database = database
 
-    def read(self, path: str, query: dict[str, str]) -> tuple[Any, int]:
+    def read(self, path: str, query: dict[str, Any]) -> tuple[Any, int]:
         if path == "/runs":
-            return list_runs(self.database, self._limit(query.get("limit"))), 200
+            return list_runs(self.database, filters=query), 200
         resources = {
             "/alerts": "alerts",
             "/incidents": "incidents",
@@ -87,7 +100,7 @@ class ApiOperations:
         }
         for prefix, resource in resources.items():
             if path == prefix:
-                return list_resource(self.database, resource, query.get("severity")), 200
+                return list_resource(self.database, resource, filters=query), 200
             if path.startswith(prefix + "/"):
                 identifier = path[len(prefix) + 1:]
                 if not identifier or "/" in identifier:
@@ -127,9 +140,62 @@ class ApiOperations:
             result = int(value)
         except ValueError as exc:
             raise ValueError("limit must be an integer") from exc
-        if not 1 <= result <= 1000:
-            raise ValueError("limit must be between 1 and 1000")
+        if not 1 <= result <= QUERY_LIMIT_MAX:
+            raise ValueError(f"limit must be between 1 and {QUERY_LIMIT_MAX}")
         return result
+
+    @staticmethod
+    def _timestamp(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        from datetime import datetime, timezone
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("timestamp must be ISO-8601") from exc
+        if parsed.tzinfo is None:
+            raise ValueError("timestamp must include timezone")
+        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    @classmethod
+    def _query(cls, path: str, raw: str) -> dict[str, Any]:
+        parsed = parse_qs(raw, keep_blank_values=True)
+        repeated = [key for key, items in parsed.items() if len(items) != 1]
+        if repeated:
+            raise ValueError("query parameters must not be repeated")
+        values = {key: items[0] for key, items in parsed.items()}
+        unknown = set(values) - QUERY_FIELDS[path]
+        if unknown:
+            raise ValueError("unsupported query parameter")
+        if "limit" in values:
+            values["limit"] = cls._limit(values["limit"])
+        for key in ("since", "until"):
+            if key in values:
+                values[key] = cls._timestamp(values[key])
+        if "severity" in values and values["severity"] not in ALLOWED_SEVERITIES:
+            raise ValueError("invalid severity")
+        if "status" in values and values["status"] not in RESOURCE_STATUSES.get(path, ALLOWED_STATUSES):
+            raise ValueError("invalid status")
+        if "source" in values and values["source"] not in ALLOWED_SOURCES:
+            raise ValueError("unsupported source")
+        for key in ("rule_id", "run_id", "incident_id"):
+            if key in values and (not values[key] or any(char in values[key] for char in "\x00\r\n")):
+                raise ValueError(f"invalid {key}")
+        if "risk_level" in values and values["risk_level"] not in ALLOWED_SEVERITIES:
+            raise ValueError("invalid risk level")
+        for key in ("min_risk_score", "max_risk_score"):
+            if key in values:
+                try:
+                    values[key] = float(values[key])
+                except ValueError as exc:
+                    raise ValueError("risk score must be numeric") from exc
+                if not math.isfinite(values[key]):
+                    raise ValueError("risk score must be finite")
+        if "min_risk_score" in values and "max_risk_score" in values and values["min_risk_score"] > values["max_risk_score"]:
+            raise ValueError("minimum risk score exceeds maximum")
+        if "since" in values and "until" in values and values["since"] > values["until"]:
+            raise ValueError("since exceeds until")
+        return values
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -300,8 +366,9 @@ class _Handler(BaseHTTPRequestHandler):
             pair = self._require(Permission.READ_ANALYSIS)
             if pair is None:
                 return
-            query = {key: values[-1] for key, values in
-                     parse_qs(parts.query, keep_blank_values=True).items()}
+            query = self.server.ops._query(parts.path, parts.query) if parts.path in QUERY_FIELDS else {}
+            if parts.query and parts.path not in QUERY_FIELDS:
+                raise ValueError("query parameters are not supported for detail endpoints")
             payload, status = self.server.ops.read(parts.path, query)
             self._send(status, payload)
         except ValueError as exc:
@@ -426,7 +493,7 @@ class SentinelHTTPServer(ThreadingHTTPServer):
             self._db = Database(self.database)
             self.auth = AuthService(self._db)
         self._request_state = threading.local()
-        self.ops = ApiOperations(database)
+        self.ops = ApiOperations(self.database)
         self.login_limiter = RateLimiter(10, 60)
         super().__init__((host, port), _Handler)
 

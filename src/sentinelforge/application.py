@@ -26,7 +26,7 @@ def analyze_request(path: str, source: str = "linux_auth", severity: Optional[st
 
 
 def list_resource(database: Optional[str], resource: str, severity: Optional[str] = None,
-                  limit: Optional[int] = None) -> list[Dict[str, Any]]:
+                  limit: Optional[int] = None, filters: Optional[Dict[str, Any]] = None) -> list[Dict[str, Any]]:
     """Read persisted resource snapshots; an unconfigured store is empty."""
     if severity is not None and severity not in _ALLOWED_SEVERITIES:
         raise ValueError("invalid severity")
@@ -34,10 +34,13 @@ def list_resource(database: Optional[str], resource: str, severity: Optional[str
         raise ValueError("limit must be between 1 and 1000")
     if not database:
         return []
+    query = dict(filters or {})
+    if severity is not None:
+        query["severity"] = severity
+    if limit is not None:
+        query["limit"] = limit
     with Database(database) as db:
-        repository = AnalysisRepository(db)
-        values = repository.list_payloads(resource, severity)
-    return values[:limit] if limit is not None else values
+        return AnalysisRepository(db).list_payloads(resource, filters=query)
 
 
 def get_resource(database: Optional[str], resource: str, entity_id: str) -> Optional[Dict[str, Any]]:
@@ -48,5 +51,6 @@ def get_resource(database: Optional[str], resource: str, entity_id: str) -> Opti
         return AnalysisRepository(db).get_payload(resource, entity_id)
 
 
-def list_runs(database: Optional[str], limit: Optional[int] = None) -> list[Dict[str, Any]]:
-    return list_resource(database, "runs", limit=limit)
+def list_runs(database: Optional[str], limit: Optional[int] = None,
+              filters: Optional[Dict[str, Any]] = None) -> list[Dict[str, Any]]:
+    return list_resource(database, "runs", limit=limit, filters=filters)

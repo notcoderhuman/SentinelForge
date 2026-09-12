@@ -316,6 +316,28 @@ bounded and validated, paths remain local to the working directory, errors are
 concise JSON, and broad CORS is intentionally absent. This is a local
 development/analyst interface, not an authenticated production service.
 
+## Server-side queryability boundary
+
+Phase 30 extends the existing authenticated list resources without changing their
+array response shapes. `GET /alerts` accepts exact `severity`, `rule_id`, `source`,
+`run_id`, ISO-8601 `since`/`until`, and bounded `limit` filters. `GET /incidents`
+accepts exact `severity`, `status`, `risk_level`, `run_id`, numeric
+`min_risk_score`/`max_risk_score`, timestamp bounds, and `limit`. `GET
+/investigations` accepts exact `status`, `incident_id`, timestamp bounds, and
+`limit`. `GET /runs` accepts exact `source`, timestamp bounds, and `limit`.
+
+Supported query names are allowlisted; unknown names, malformed enums/IDs,
+non-timezone timestamps, invalid numeric scores, reversed ranges, and limits
+outside 1–1000 return HTTP 400. Timestamp bounds are normalized to UTC and are
+inclusive. Persisted analysis timestamps are canonicalized to UTC `Z` form at
+repository write boundaries; pre-existing historical rows are not rewritten and
+are outside the canonical-storage guarantee. Query values are parameterized; JSON filters use only fixed internal
+paths. No query parameter selects a database path. Existing no-parameter calls,
+severity calls, detail routes, and `GET /runs?limit=N` retain their array-shaped
+responses and default row-order compatibility. Requests using query filters use
+explicit deterministic descending timestamp/update ordering with stable ID
+secondary keys, and apply SQL limits after filtering.
+
 ## Authentication, authorization, and audit boundary
 
 `GET /health` is intentionally public and reports only minimal service status;

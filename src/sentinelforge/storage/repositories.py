@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, TypeVar
 
 from ..alerts import Alert
@@ -69,9 +69,10 @@ class AnalysisRepository:
 
     def save_run(self, run_id: str, run: Any) -> None:
         payload = run.to_dict() if hasattr(run, "to_dict") else (run if isinstance(run, dict) else {"value": run})
-        created = payload.get("started_at") or payload.get("created_at") or payload.get("timestamp") or datetime.now().astimezone().isoformat()
+        created = payload.get("started_at") or payload.get("created_at") or payload.get("timestamp") or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        parsed_created = _dt(created).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         with self.db.transaction() as c:
-            c.execute("INSERT OR IGNORE INTO runs VALUES (?, ?, ?)", (run_id, created, _json(payload)))
+            c.execute("INSERT OR IGNORE INTO runs VALUES (?, ?, ?)", (run_id, parsed_created, _json(payload)))
 
     def list_runs(self) -> list[Dict[str, Any]]:
         rows = self.db.connection.execute("SELECT payload FROM runs ORDER BY created_at, run_id").fetchall()
@@ -92,17 +93,63 @@ class AnalysisRepository:
             for investigation in investigations:
                 self.save_investigation(investigation)
 
-    def list_payloads(self, resource: str, severity: Optional[str] = None) -> list[Dict[str, Any]]:
+    def list_payloads(self, resource: str, severity: Optional[str] = None,
+                      filters: Optional[Dict[str, Any]] = None) -> list[Dict[str, Any]]:
         table = {"runs": "runs", "alerts": "alerts", "incidents": "incidents", "investigations": "investigations"}.get(resource)
         if table is None:
             raise ValueError("unsupported resource")
+        values: Dict[str, Any] = dict(filters or {})
+        if severity is not None:
+            values["severity"] = severity
+        json_paths = {
+            "alerts": {"severity": "$.severity", "rule_id": "$.rule_id", "source": "$.source"},
+            "incidents": {"severity": "$.severity", "status": "$.status", "risk_level": "$.risk_assessment.level"},
+            "investigations": {"status": "$.status"},
+            "runs": {"source": "$.source"},
+        }
+        allowed = set(json_paths[resource]) | {"run_id", "incident_id", "since", "until", "min_risk_score", "max_risk_score", "limit"}
+        unknown = set(values) - allowed
+        if unknown:
+            raise ValueError("unsupported query parameter")
+        clauses: list[str] = []
+        params: list[Any] = []
+        for key, json_path in json_paths[resource].items():
+            if key in values:
+                clauses.append(f"json_extract(payload, '{json_path}') = ?")
+                params.append(values[key])
+        if "run_id" in values:
+            clauses.append("run_id = ?")
+            params.append(values["run_id"])
+        if "incident_id" in values:
+            clauses.append("incident_id = ?")
+            params.append(values["incident_id"])
+        timestamp_column = {"alerts": "timestamp", "incidents": "updated_at", "investigations": "updated_at", "runs": "created_at"}[resource]
+        if "since" in values:
+            clauses.append(f"{timestamp_column} >= ?")
+            params.append(values["since"])
+        if "until" in values:
+            clauses.append(f"{timestamp_column} <= ?")
+            params.append(values["until"])
+        if "min_risk_score" in values:
+            clauses.append("CAST(json_extract(payload, '$.risk_assessment.score') AS REAL) >= ?")
+            params.append(values["min_risk_score"])
+        if "max_risk_score" in values:
+            clauses.append("CAST(json_extract(payload, '$.risk_assessment.score') AS REAL) <= ?")
+            params.append(values["max_risk_score"])
         query = f"SELECT payload FROM {table}"
-        params: tuple[Any, ...] = ()
-        if severity is not None and resource in {"alerts", "incidents"}:
-            query += " WHERE json_extract(payload, '$.severity') = ?"
-            params = (severity,)
-        query += " ORDER BY rowid"
-        return [json.loads(row[0]) for row in self.db.connection.execute(query, params).fetchall()]
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        legacy_order = ((resource in {"alerts", "incidents"} and set(values) <= {"severity"})
+                        or (resource == "runs" and set(values) <= {"limit"}))
+        if values and not legacy_order:
+            order = {"alerts": "timestamp DESC, alert_id", "incidents": "updated_at DESC, incident_id", "investigations": "updated_at DESC, investigation_id", "runs": "created_at DESC, run_id"}[resource]
+            query += f" ORDER BY {order}"
+        else:
+            query += " ORDER BY rowid"
+        if "limit" in values:
+            query += " LIMIT ?"
+            params.append(values["limit"])
+        return [json.loads(row[0]) for row in self.db.connection.execute(query, tuple(params)).fetchall()]
 
     def get_payload(self, resource: str, entity_id: str) -> Optional[Dict[str, Any]]:
         columns = {"runs": ("runs", "run_id"), "alerts": ("alerts", "alert_id"), "incidents": ("incidents", "incident_id"), "investigations": ("investigations", "investigation_id")}
