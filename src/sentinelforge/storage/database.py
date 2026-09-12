@@ -62,10 +62,12 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 
 class Database:
     """Connection owner with foreign keys, schema versioning, and transactions."""
-    def __init__(self, path: Union[str, Path] = ":memory:") -> None:
+    def __init__(self, path: Union[str, Path] = ":memory:", *, uri: bool = False) -> None:
         self.path = str(path)
-        self.connection = sqlite3.connect(self.path)
+        self.uri = uri or self.path.startswith("file:")
+        self.connection = sqlite3.connect(self.path, timeout=5.0, uri=self.uri)
         self.connection.row_factory = sqlite3.Row
+        self.connection.execute("PRAGMA busy_timeout = 5000")
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA journal_mode = WAL")
         self._initialize()

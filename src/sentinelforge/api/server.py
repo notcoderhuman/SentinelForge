@@ -174,7 +174,7 @@ class _Handler(BaseHTTPRequestHandler):
         return {key: morsel.value for key, morsel in jar.items()}
 
     def _pair(self):
-        return self.server.auth.resolve(self._cookies().get("sf_session"))
+        return self.server.request_auth().resolve(self._cookies().get("sf_session"))
 
     def _valid_origin(self) -> bool:
         host = self.headers.get("Host", "")
@@ -202,7 +202,7 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         csrf = self.headers.get("X-CSRF-Token", "")
         if mutate and (not self._valid_origin()
-                       or not self.server.auth.csrf_valid(session, csrf)):
+                       or not self.server.request_auth().csrf_valid(session, csrf)):
             self._error(403, "request validation failed")
             return None
         return pair
@@ -284,7 +284,7 @@ class _Handler(BaseHTTPRequestHandler):
                 pair = self._require(Permission.ADMIN_USERS)
                 if pair:
                     self._send(200, [user.public_dict()
-                                     for user in self.server.auth.list_users()])
+                                     for user in self.server.request_auth().list_users()])
                 return
             if parts.path == "/audit":
                 pair = self._require(Permission.READ_AUDIT)
@@ -322,7 +322,7 @@ class _Handler(BaseHTTPRequestHandler):
                     self._error(429, "rate limit exceeded")
                     return
                 try:
-                    user, session, token = self.server.auth.authenticate(
+                    user, session, token = self.server.request_auth().authenticate(
                         str(body.get("username", "")),
                         str(body.get("password", "")),
                     )
@@ -340,7 +340,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/auth/logout":
                 pair = self._require(mutate=True)
                 if pair:
-                    self.server.auth.revoke(self._cookies().get("sf_session", ""))
+                    self.server.request_auth().revoke(self._cookies().get("sf_session", ""))
                     self._audit("logout", pair[0])
                     self._send(200, {"authenticated": False}, (
                         "sf_session=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/",
@@ -350,14 +350,14 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/auth/logout-all":
                 pair = self._require(mutate=True)
                 if pair:
-                    self.server.auth.logout_all(pair[0].user_id)
+                    self.server.request_auth().logout_all(pair[0].user_id)
                     self._audit("session_invalidation", pair[0])
                     self._send(200, {"sessions_invalidated": True})
                 return
             if path == "/auth/change-password":
                 pair = self._require(mutate=True)
                 if pair:
-                    self.server.auth.change_password(
+                    self.server.request_auth().change_password(
                         pair[0].user_id,
                         str(body.get("current_password", "")),
                         str(body.get("new_password", "")),
@@ -374,7 +374,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/users":
                 pair = self._require(Permission.ADMIN_USERS, mutate=True)
                 if pair:
-                    user = self.server.auth.create_user(
+                    user = self.server.request_auth().create_user(
                         body["username"], body["password"], body.get("role", "viewer")
                     )
                     self._audit("user_create", pair[0], "user", user.user_id)
@@ -412,15 +412,47 @@ class SentinelHTTPServer(ThreadingHTTPServer):
                  database: Optional[str] = None,
                  auth: Optional[AuthService] = None) -> None:
         self.bind_host = host
-        self.database = database or ":memory:"
-        self._db = Database(self.database)
-        self.auth = auth or AuthService(self._db)
+        self._owns_db = auth is None
+        if auth is not None:
+            if auth.db.path == ":memory:":
+                raise ValueError("auth service must use a persistent database for threaded serving")
+            if database is not None and str(database) != auth.db.path:
+                raise ValueError("database path must match supplied auth service database")
+            self.database = auth.db.path
+            self._db = auth.db
+            self.auth = auth
+        else:
+            self.database = database or f"file:sentinelforge-{uuid.uuid4().hex}?mode=memory&cache=shared"
+            self._db = Database(self.database)
+            self.auth = AuthService(self._db)
+        self._request_state = threading.local()
         self.ops = ApiOperations(database)
         self.login_limiter = RateLimiter(10, 60)
         super().__init__((host, port), _Handler)
 
+    def request_auth(self) -> AuthService:
+        """Return the authentication service bound to this request thread."""
+        auth = getattr(self._request_state, "auth", None)
+        if auth is None:
+            raise RuntimeError("request authentication service is unavailable outside a request")
+        return auth
+
+    def finish_request(self, request, client_address) -> None:
+        """Bind a short-lived database connection to the handling thread."""
+        db = Database(self.database)
+        self._request_state.db = db
+        self._request_state.auth = AuthService(db)
+        try:
+            super().finish_request(request, client_address)
+        finally:
+            self._request_state.auth = None
+            self._request_state.db = None
+            if self._owns_db:
+                db.close()
+
     def server_close(self) -> None:
-        self._db.close()
+        if self._owns_db:
+            self._db.close()
         super().server_close()
 
 
