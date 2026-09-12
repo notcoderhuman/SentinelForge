@@ -11,6 +11,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .alerts import ALLOWED_SEVERITIES, Alert
 from .detection.engine import DetectionEngine
+from .detection.provenance import engine_configuration_fingerprint
 from .events import SecurityEvent
 from .ingestion.pipeline import ingest_file
 
@@ -28,9 +29,13 @@ class ReplayResult:
     alerts: tuple[Alert, ...]
     diagnostics: tuple[Mapping[str, Any], ...]
     elapsed_seconds: float
+    detection_configuration_fingerprint: str
 
     def to_dict(self) -> dict[str, Any]:
+        fingerprints = {alert.rule_fingerprint for alert in self.alerts if alert.rule_fingerprint is not None}
         return {
+            "detection_configuration_fingerprint": self.detection_configuration_fingerprint,
+            "rule_fingerprints": sorted(fingerprints),
             "event_count": len(self.events),
             "alert_count": len(self.alerts),
             "alerts": [alert.to_dict() for alert in self.alerts],
@@ -76,9 +81,11 @@ def replay_events(events: Sequence[SecurityEvent], engine: DetectionEngine | Non
     """Run the existing DetectionEngine without mutating the input sequence."""
     started = time.perf_counter()
     copied = tuple(events)
-    alerts = tuple((engine or DetectionEngine()).detect(copied))
+    effective_engine = engine or DetectionEngine()
+    alerts = tuple(effective_engine.detect(copied))
     elapsed = time.perf_counter() - started
-    return ReplayResult(copied, alerts, (), elapsed)
+    return ReplayResult(copied, alerts, (), elapsed,
+                         engine_configuration_fingerprint(effective_engine.config, effective_engine.registry))
 
 
 def replay_file(path: str | Path, source: str, engine: DetectionEngine | None = None) -> ReplayResult:
@@ -88,7 +95,8 @@ def replay_file(path: str | Path, source: str, engine: DetectionEngine | None = 
     replay = replay_events(result.events, engine)
     return ReplayResult(replay.events, replay.alerts,
                         tuple(item.to_dict() for item in result.diagnostics),
-                        time.perf_counter() - started)
+                        time.perf_counter() - started,
+                        replay.detection_configuration_fingerprint)
 
 
 def load_expected(path: str | Path) -> tuple[ExpectedAlert, ...]:

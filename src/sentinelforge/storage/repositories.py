@@ -175,7 +175,7 @@ class AnalysisRepository:
 
     @staticmethod
     def _alert_from_payload(d: Dict[str, Any]) -> Alert:
-        return Alert(d["alert_id"], d["rule_id"], d["severity"], _dt(d["timestamp"]), d["title"], d["description"], [_event(x) for x in d["evidence"]], d.get("source", "linux-auth"))
+        return Alert(d["alert_id"], d["rule_id"], d["severity"], _dt(d["timestamp"]), d["title"], d["description"], [_event(x) for x in d["evidence"]], d.get("source", "linux-auth"), d.get("rule_fingerprint"))
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         row = self.db.connection.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
@@ -190,7 +190,7 @@ class AnalysisRepository:
         row = self.db.connection.execute("SELECT payload FROM alerts WHERE alert_id=?", (alert_id,)).fetchone()
         if row is None: return None
         d = json.loads(row[0])
-        return Alert(d["alert_id"], d["rule_id"], d["severity"], _dt(d["timestamp"]), d["title"], d["description"], [ _event(x) for x in d["evidence"] ], d.get("source", "linux-auth"))
+        return Alert(d["alert_id"], d["rule_id"], d["severity"], _dt(d["timestamp"]), d["title"], d["description"], [ _event(x) for x in d["evidence"] ], d.get("source", "linux-auth"), d.get("rule_fingerprint"))
 
     def save_incident(self, incident: Incident, run_id: Optional[str] = None) -> None:
         d = incident.to_dict()

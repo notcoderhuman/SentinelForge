@@ -27,6 +27,7 @@ class Alert:
     description: str
     evidence: List[SecurityEvent]
     source: str = "linux-auth"
+    rule_fingerprint: str | None = None
 
     @property
     def attack_mappings(self) -> tuple[TechniqueMapping, ...]:
@@ -55,6 +56,7 @@ class Alert:
             "description": self.description,
             "evidence": [event.to_dict() for event in self.evidence],
             "source": self.source,
+            **({"rule_fingerprint": self.rule_fingerprint} if self.rule_fingerprint is not None else {}),
             "attack_mappings": [mapping.to_dict() for mapping in self.attack_mappings],
             "observables": [observable.to_dict() for observable in self.observables],
         }

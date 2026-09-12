@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 import ipaddress
 import re
@@ -14,6 +15,7 @@ from ..threat_context import ThreatContext
 from ..threat_context_engine import match_context
 from .registry import DEFAULT_RULE_REGISTRY, RuleRegistry
 from .rules import RuleConfig
+from .provenance import rule_fingerprint
 
 _DESTINATION_PATTERN = re.compile(
     r"(?:destination(?:_ip)?|dest(?:ination)?|dst|remote(?:_ip)?|to)"
@@ -85,7 +87,8 @@ class DetectionEngine:
         alerts.extend(self._windows_system_detections(ordered_events))
         alerts.extend(self._persistence_detections(ordered_events))
         unique = {alert.alert_id: alert for alert in alerts}
-        return sorted(unique.values(), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
+        return sorted((replace(alert, rule_fingerprint=rule_fingerprint(self.registry.get(alert.rule_id), self.config))
+                       for alert in unique.values()), key=lambda alert: (alert.timestamp, alert.rule_id, alert.alert_id))
 
     @staticmethod
     def _dns_events(events: Sequence[SecurityEvent]) -> List[SecurityEvent]:
