@@ -79,8 +79,8 @@ class Database:
             if row is None:
                 conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
             elif row[0] == 1:
-                # The CREATE IF NOT EXISTS statements above are the additive v2 migration.
-                conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
+                # The schema is additive and already at the current version.
+                pass
             elif row[0] != SCHEMA_VERSION:
                 raise RuntimeError(f"unsupported database schema version: {row[0]}")
 
@@ -89,12 +89,21 @@ class Database:
         return int(self.connection.execute("SELECT version FROM schema_version").fetchone()[0])
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
-        """Commit on success and roll back atomically on failure."""
+    def transaction(self, immediate: bool = False) -> Iterator[sqlite3.Connection]:
+        """Commit on success and roll back atomically on failure.
+
+        ``immediate`` reserves the SQLite write lock before reading mutable
+        workflow state, preventing concurrent case mutations from both
+        observing the same state and then failing unpredictably at write time.
+        """
         nested = self.connection.in_transaction
         savepoint = "sentinelforge_nested"
         try:
-            self.connection.execute(f"SAVEPOINT {savepoint}" if nested else "BEGIN")
+            if immediate:
+                self.connection.execute("PRAGMA busy_timeout = 200")
+            self.connection.execute(f"SAVEPOINT {savepoint}" if nested else ("BEGIN IMMEDIATE" if immediate else "BEGIN"))
+            if immediate:
+                self.connection.execute("PRAGMA busy_timeout = 5000")
             yield self.connection
         except Exception:
             if nested:
@@ -102,12 +111,16 @@ class Database:
                 self.connection.execute(f"RELEASE SAVEPOINT {savepoint}")
             else:
                 self.connection.rollback()
+            if immediate:
+                self.connection.execute("PRAGMA busy_timeout = 5000")
             raise
         else:
             if nested:
                 self.connection.execute(f"RELEASE SAVEPOINT {savepoint}")
             else:
                 self.connection.commit()
+            if immediate:
+                self.connection.execute("PRAGMA busy_timeout = 5000")
 
     def close(self) -> None:
         self.connection.close()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, TypeVar
 
@@ -16,6 +17,15 @@ from ..threat_context import ThreatContext
 from .database import Database
 
 T = TypeVar("T")
+
+
+class CaseConflictError(Exception):
+    """A concurrent case mutation changed the observed state."""
+
+
+class InvalidCaseTransitionError(ValueError):
+    """A requested case state transition is not allowed."""
+
 
 def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -196,13 +206,51 @@ class AnalysisRepository:
     def save_investigation(self, investigation: Investigation) -> None:
         d = investigation.to_dict()
         with self.db.transaction() as c:
-            c.execute("INSERT OR IGNORE INTO investigations VALUES (?, ?, ?, ?, ?)", (investigation.investigation_id, investigation.incident_id, d["created_at"], d["updated_at"], _json(d)))
+            existing = c.execute(
+                "SELECT payload FROM investigations WHERE investigation_id=?",
+                (investigation.investigation_id,),
+            ).fetchone()
+            if existing is not None:
+                previous = json.loads(existing["payload"])
+                merged_notes = {
+                    item["note_id"]: item
+                    for item in previous.get("analyst_notes", [])
+                }
+                merged_notes.update({
+                    item["note_id"]: item
+                    for item in d.get("analyst_notes", [])
+                })
+                d["analyst_notes"] = sorted(
+                    merged_notes.values(),
+                    key=lambda item: (_dt(item["timestamp"]), item["note_id"]),
+                )
+                # Analysis persistence must not rewind analyst workflow state.
+                d["status"] = previous.get("status", d["status"])
+                d["created_at"] = previous.get("created_at", d["created_at"])
+                d["updated_at"] = previous.get("updated_at", d["updated_at"])
+                c.execute(
+                    "UPDATE investigations SET payload=? WHERE investigation_id=?",
+                    (_json(d), investigation.investigation_id),
+                )
+            else:
+                c.execute(
+                    "INSERT INTO investigations VALUES (?, ?, ?, ?, ?)",
+                    (investigation.investigation_id, investigation.incident_id,
+                     d["created_at"], d["updated_at"], _json(d)),
+                )
             c.execute("DELETE FROM evidence WHERE investigation_id=?", (investigation.investigation_id,))
-            c.execute("DELETE FROM notes WHERE investigation_id=?", (investigation.investigation_id,))
             for item in investigation.evidence:
-                p = item.to_dict(); c.execute("INSERT INTO evidence VALUES (?, ?, ?, ?)", (item.evidence_id, investigation.investigation_id, p["timestamp"], _json(p)))
-            for item in investigation.analyst_notes:
-                p = item.to_dict(); c.execute("INSERT INTO notes VALUES (?, ?, ?, ?)", (item.note_id, investigation.investigation_id, p["timestamp"], _json(p)))
+                p = item.to_dict(); c.execute(
+                    "INSERT INTO evidence VALUES (?, ?, ?, ?)",
+                    (item.evidence_id, investigation.investigation_id,
+                     p["timestamp"], _json(p)),
+                )
+            for item in d.get("analyst_notes", []):
+                c.execute(
+                    "INSERT OR IGNORE INTO notes VALUES (?, ?, ?, ?)",
+                    (item["note_id"], investigation.investigation_id,
+                     item["timestamp"], _json(item)),
+                )
 
     def get_investigation(self, investigation_id: str) -> Optional[Investigation]:
         row = self.db.connection.execute("SELECT payload FROM investigations WHERE investigation_id=?", (investigation_id,)).fetchone()
@@ -212,6 +260,81 @@ class AnalysisRepository:
         timeline = tuple(TimelineEntry(_dt(x["timestamp"]), x["evidence_id"], x["summary"]) for x in d["timeline"])
         notes = tuple(AnalystNote(x["note_id"], _dt(x["timestamp"]), x["author"], x["content"]) for x in d["analyst_notes"])
         return Investigation(d["investigation_id"], d["incident_id"], d["status"], _dt(d["created_at"]), _dt(d["updated_at"]), evidence, timeline, notes, tuple(d.get("source_rule_ids", ())), tuple(_correlation(x) for x in d.get("correlations", ())), _risk(d.get("risk_assessment")), _contexts(d.get("threat_context", ())))
+
+    def mutate_incident_status(self, incident_id: str, target_status: str, *, user_id: str, ip_address: str) -> tuple[Optional[Incident], bool]:
+        from ..incidents import ALLOWED_STATUSES
+        if target_status not in ALLOWED_STATUSES:
+            raise ValueError("invalid status")
+        with self.db.transaction(immediate=True) as conn:
+            row = conn.execute("SELECT updated_at, payload FROM incidents WHERE incident_id=?", (incident_id,)).fetchone()
+            if row is None:
+                return None, False
+            observed_updated_at = row["updated_at"]
+            data = json.loads(row["payload"])
+            current = data["status"]
+            if current == target_status:
+                return self.get_incident(incident_id), False
+            updated = self.get_incident(incident_id)
+            if updated is None:
+                return None, False
+            try:
+                transitioned = updated.transition_to(target_status, datetime.now(timezone.utc))
+            except ValueError as exc:
+                raise InvalidCaseTransitionError(str(exc)) from exc
+            payload = transitioned.to_dict()
+            result = conn.execute("UPDATE incidents SET updated_at=?, payload=? WHERE incident_id=? AND updated_at=? AND json_extract(payload, '$.status')=?", (payload["updated_at"], _json(payload), incident_id, observed_updated_at, current))
+            if result.rowcount != 1:
+                raise CaseConflictError("case changed concurrently")
+            from .auth_repositories import AuthRepository
+            AuthRepository(self.db).insert_audit(conn, audit_id=uuid.uuid4().hex, user_id=user_id, action="incident_status_transition", resource="incident", resource_id=incident_id, details={"from_status": current, "to_status": target_status, "changed": True}, ip_address=ip_address)
+            return transitioned, True
+
+    def mutate_investigation_status(self, investigation_id: str, target_status: str, *, user_id: str, ip_address: str) -> tuple[Optional[Investigation], bool]:
+        if target_status not in {"active", "completed"}:
+            raise ValueError("invalid status")
+        with self.db.transaction(immediate=True) as conn:
+            row = conn.execute("SELECT updated_at, payload FROM investigations WHERE investigation_id=?", (investigation_id,)).fetchone()
+            if row is None:
+                return None, False
+            observed_updated_at = row["updated_at"]
+            data = json.loads(row["payload"])
+            current = data["status"]
+            if current == target_status:
+                return self.get_investigation(investigation_id), False
+            if current != "active" or target_status != "completed":
+                raise InvalidCaseTransitionError("invalid investigation transition")
+            investigation = self.get_investigation(investigation_id)
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            data["status"] = target_status
+            data["updated_at"] = now
+            result = conn.execute("UPDATE investigations SET updated_at=?, payload=? WHERE investigation_id=? AND updated_at=? AND json_extract(payload, '$.status')=?", (now, _json(data), investigation_id, observed_updated_at, current))
+            if result.rowcount != 1:
+                raise CaseConflictError("case changed concurrently")
+            from .auth_repositories import AuthRepository
+            AuthRepository(self.db).insert_audit(conn, audit_id=uuid.uuid4().hex, user_id=user_id, action="investigation_status_transition", resource="investigation", resource_id=investigation_id, details={"from_status": current, "to_status": target_status, "changed": True}, ip_address=ip_address)
+            return self.get_investigation(investigation_id), True
+
+    def append_investigation_note(self, investigation_id: str, note: AnalystNote, *, user_id: str, ip_address: str) -> Optional[Investigation]:
+        with self.db.transaction(immediate=True) as conn:
+            row = conn.execute("SELECT updated_at, payload FROM investigations WHERE investigation_id=?", (investigation_id,)).fetchone()
+            if row is None:
+                return None
+            data = json.loads(row["payload"])
+            if data.get("status") != "active":
+                raise InvalidCaseTransitionError("notes cannot be added to a completed investigation")
+            observed_updated_at = row["updated_at"]
+            serialized = note.to_dict()
+            data.setdefault("analyst_notes", []).append(serialized)
+            data["analyst_notes"].sort(key=lambda item: (_dt(item["timestamp"]), item["note_id"]))
+            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            data["updated_at"] = now
+            result = conn.execute("UPDATE investigations SET updated_at=?, payload=? WHERE investigation_id=? AND updated_at=?", (now, _json(data), investigation_id, observed_updated_at))
+            if result.rowcount != 1:
+                raise CaseConflictError("case changed concurrently")
+            conn.execute("INSERT INTO notes VALUES (?, ?, ?, ?)", (note.note_id, investigation_id, serialized["timestamp"], _json(serialized)))
+            from .auth_repositories import AuthRepository
+            AuthRepository(self.db).insert_audit(conn, audit_id=uuid.uuid4().hex, user_id=user_id, action="investigation_note_create", resource="investigation_note", resource_id=note.note_id, details={"author": note.author, "content_length": len(note.content)}, ip_address=ip_address)
+            return self.get_investigation(investigation_id)
 
     def save_note(self, investigation_id: str, note: AnalystNote) -> None:
         with self.db.transaction() as c:

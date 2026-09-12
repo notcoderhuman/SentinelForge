@@ -76,15 +76,23 @@ class AuthRepository:
                                   (datetime.now(timezone.utc).isoformat(), session_id))
         return result.rowcount == 1
 
+    def insert_audit(self, conn, *, audit_id: str, user_id: Optional[str], action: str,
+                     resource: Optional[str] = None, resource_id: Optional[str] = None,
+                     details: Optional[dict[str, Any]] = None, ip_address: Optional[str] = None,
+                     created_at: Optional[str] = None) -> None:
+        conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)",
+                     (audit_id, user_id, action, resource, resource_id,
+                      json.dumps(details or {}, sort_keys=True), ip_address,
+                      created_at or datetime.now(timezone.utc).isoformat()))
+
     def add_audit(self, *, audit_id: str, user_id: Optional[str], action: str,
                   resource: Optional[str] = None, resource_id: Optional[str] = None,
                   details: Optional[dict[str, Any]] = None, ip_address: Optional[str] = None,
                   created_at: Optional[str] = None) -> None:
         with self.db.transaction() as conn:
-            conn.execute("INSERT INTO audit_log VALUES (?,?,?,?,?,?,?,?)",
-                         (audit_id, user_id, action, resource, resource_id,
-                          json.dumps(details or {}, sort_keys=True), ip_address,
-                          created_at or datetime.now(timezone.utc).isoformat()))
+            self.insert_audit(conn, audit_id=audit_id, user_id=user_id, action=action,
+                              resource=resource, resource_id=resource_id, details=details,
+                              ip_address=ip_address, created_at=created_at)
 
     def list_audit(self, *, user_id: Optional[str] = None, limit: int = 100) -> list[dict[str, Any]]:
         if limit < 1 or limit > 1000:

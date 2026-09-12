@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import math
 import secrets
 import threading
@@ -18,7 +19,9 @@ from urllib.parse import parse_qs, urlsplit
 from ..application import analyze_request, get_resource, list_resource, list_runs
 from ..auth.rbac import Permission, allowed
 from ..auth.service import AuthService, AuthenticationError
-from ..storage import AuthRepository, Database
+from ..storage import AnalysisRepository, AuthRepository, Database
+from ..storage.repositories import CaseConflictError, InvalidCaseTransitionError
+from ..investigations import AnalystNote
 
 LOGGER = logging.getLogger(__name__)
 MAX_BODY_BYTES = 64 * 1024
@@ -432,6 +435,52 @@ class _Handler(BaseHTTPRequestHandler):
                     self._audit("password_change", pair[0])
                     self._send(200, {"password_changed": True})
                 return
+            if path.startswith("/incidents/") and path.endswith("/status"):
+                pair = self._require(Permission.MANAGE_CASES, mutate=True)
+                if pair:
+                    identifier = path[len("/incidents/"):-len("/status")].strip("/")
+                    if not identifier or "/" in identifier or set(body) != {"status"} or not isinstance(body["status"], str):
+                        raise ValueError("invalid request")
+                    with Database(self.server.database) as db:
+                        incident, changed = AnalysisRepository(db).mutate_incident_status(identifier, body["status"], user_id=pair[0].user_id, ip_address=self.client_address[0])
+                    if incident is None:
+                        self._error(404, "not found")
+                    else:
+                        self._send(200, {"changed": changed, "incident": incident.to_dict()})
+                return
+            if path.startswith("/investigations/") and path.endswith("/status"):
+                pair = self._require(Permission.MANAGE_CASES, mutate=True)
+                if pair:
+                    identifier = path[len("/investigations/"):-len("/status")].strip("/")
+                    if not identifier or "/" in identifier or set(body) != {"status"} or not isinstance(body["status"], str):
+                        raise ValueError("invalid request")
+                    with Database(self.server.database) as db:
+                        investigation, changed = AnalysisRepository(db).mutate_investigation_status(identifier, body["status"], user_id=pair[0].user_id, ip_address=self.client_address[0])
+                    if investigation is None:
+                        self._error(404, "not found")
+                    else:
+                        self._send(200, {"changed": changed, "investigation": investigation.to_dict()})
+                return
+            if path.startswith("/investigations/") and path.endswith("/notes"):
+                pair = self._require(Permission.MANAGE_CASES, mutate=True)
+                if pair:
+                    identifier = path[len("/investigations/"):-len("/notes")].strip("/")
+                    if not identifier or "/" in identifier or set(body) != {"content"}:
+                        raise ValueError("invalid request")
+                    content = body["content"]
+                    if not isinstance(content, str) or not content.strip():
+                        raise ValueError("content must be non-empty")
+                    if len(content.encode("utf-8")) > 16 * 1024:
+                        raise OverflowError
+                    from datetime import datetime, timezone
+                    note = AnalystNote(uuid.uuid4().hex, datetime.now(timezone.utc), pair[0].username, content)
+                    with Database(self.server.database) as db:
+                        investigation = AnalysisRepository(db).append_investigation_note(identifier, note, user_id=pair[0].user_id, ip_address=self.client_address[0])
+                    if investigation is None:
+                        self._error(404, "not found")
+                    else:
+                        self._send(201, {"note": note.to_dict()})
+                return
             if path == "/analyze":
                 pair = self._require(Permission.RUN_ANALYSIS, mutate=True)
                 if pair:
@@ -450,6 +499,16 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(404, "not found")
         except OverflowError:
             self._error(413, "request body too large")
+        except (CaseConflictError, InvalidCaseTransitionError) as exc:
+            self._error(409, str(exc))
+        except sqlite3.IntegrityError:
+            self._error(409, "case mutation conflict")
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower():
+                self._error(503, "database temporarily unavailable")
+            else:
+                LOGGER.exception("database operation failed")
+                self._error(500, "internal server error")
         except (KeyError, TypeError, ValueError) as exc:
             self._error(400, str(exc))
         except Exception:
@@ -469,6 +528,25 @@ class _Handler(BaseHTTPRequestHandler):
     do_PATCH = do_PUT
     do_DELETE = do_PUT
     do_HEAD = do_PUT
+
+
+class _InitializationErrorHandler(BaseHTTPRequestHandler):
+    """Complete an HTTP exchange when request database setup is locked."""
+    def _send_unavailable(self) -> None:
+        payload = json.dumps({"error": "database temporarily unavailable"}).encode("utf-8")
+        self.send_response(503)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    do_GET = lambda self: self._send_unavailable()
+    do_POST = lambda self: self._send_unavailable()
+    do_PUT = lambda self: self._send_unavailable()
+    do_PATCH = lambda self: self._send_unavailable()
+    do_DELETE = lambda self: self._send_unavailable()
+    do_HEAD = lambda self: self._send_unavailable()
 
 
 class SentinelHTTPServer(ThreadingHTTPServer):
@@ -503,6 +581,17 @@ class SentinelHTTPServer(ThreadingHTTPServer):
         if auth is None:
             raise RuntimeError("request authentication service is unavailable outside a request")
         return auth
+
+    def process_request_thread(self, request, client_address) -> None:
+        """Run a request and map initialization lock failures safely."""
+        try:
+            self.finish_request(request, client_address)
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower():
+                raise
+            _InitializationErrorHandler(request, client_address, self)
+        finally:
+            self.shutdown_request(request)
 
     def finish_request(self, request, client_address) -> None:
         """Bind a short-lived database connection to the handling thread."""

@@ -449,8 +449,34 @@ open → investigating → resolved → closed
 open → resolved
 ```
 
-Investigation statuses are limited to `active` and `completed`. No investigation
-persistence, case-management UI, automated response, or compromise claim is
-implemented.
+Investigation statuses are limited to `active` and `completed`. Authenticated case
+workflow mutations are exposed through `POST /incidents/{id}/status`,
+`POST /investigations/{id}/status`, and `POST /investigations/{id}/notes`.
+The `MANAGE_CASES` permission is granted only to analysts and administrators;
+viewers remain read-only. Browser mutations use the existing Origin and CSRF
+validation path; a present Origin must be allowed, while requests without an
+Origin are accepted by the current same-origin policy. Status bodies contain only `status`, note bodies contain
+only `content`, and actor identity is always taken from the authenticated
+server-side session. Incident transitions remain `open → investigating`,
+`open → resolved`, `investigating → resolved`, and `resolved → closed`;
+investigations support `active → completed`. Repeating the current status is a
+200 idempotent no-op and does not update timestamps or create mutation audit
+records. Notes are append-only, server-authored, bounded to 16 KiB UTF-8, and
+cannot be edited or deleted.
+
+Each real mutation updates the JSON payload and relational timestamp, then
+inserts its audit row in the same SQLite transaction. Audit actions are
+`incident_status_transition`, `investigation_status_transition`, and
+`investigation_note_create`, with resources `incident`, `investigation`, and
+`investigation_note`. Audit details contain only bounded transition metadata or
+note author/content length; they never contain secrets, tokens, or raw evidence.
+Conditional status and payload timestamp updates prevent stale concurrent requests
+from overwriting a committed state; conflicting requests return 409. Case writes
+reserve the SQLite write lock before reading mutable state. A temporary SQLite
+lock is returned as a generic 503 response without exposing database details. A
+failed audit insertion rolls back the case mutation. Existing GET response shapes, IDs, detection semantics,
+risk, evidence, timeline, InvestigationPackage behavior, and query semantics
+remain unchanged. No investigation persistence, case-management UI, automated
+response, or compromise claim is implemented.
 
 Malformed and unsupported lines become diagnostics and do not stop other lines from being parsed. No command found in a log or evidence is executed, and the parser does not access live system logs.

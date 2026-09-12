@@ -10,10 +10,11 @@ class Permission(str, Enum):
     RUN_ANALYSIS = "run_analysis"
     ADMIN_USERS = "admin_users"
     READ_AUDIT = "read_audit"
+    MANAGE_CASES = "manage_cases"
 
 ROLE_PERMISSIONS = {
     "admin": frozenset(Permission),
-    "analyst": frozenset({Permission.READ_ANALYSIS, Permission.RUN_ANALYSIS}),
+    "analyst": frozenset({Permission.READ_ANALYSIS, Permission.RUN_ANALYSIS, Permission.MANAGE_CASES}),
     "viewer": frozenset({Permission.READ_ANALYSIS}),
 }
 
