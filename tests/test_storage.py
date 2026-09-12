@@ -12,13 +12,13 @@ class StorageTests(unittest.TestCase):
             path = Path(directory) / "sentinelforge.db"
             report = analyze_file("fixtures/auth.log", database=str(path))
             with Database(path) as db:
-                self.assertEqual(db.schema_version, 1)
+                self.assertEqual(db.schema_version, 2)
                 repository = AnalysisRepository(db)
                 runs = repository.list_runs()
                 self.assertEqual(len(runs), 1)
                 self.assertEqual(len(repository.list_alerts_for_run(runs[0]["run_id"])), len(report["alerts"]))
             with Database(path) as db:
-                self.assertEqual(db.schema_version, 1)
+                self.assertEqual(db.schema_version, 2)
 
     def test_transaction_rolls_back(self):
         with tempfile.TemporaryDirectory() as directory:

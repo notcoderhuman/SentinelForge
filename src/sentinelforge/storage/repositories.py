@@ -11,6 +11,7 @@ from ..correlation import CorrelationFinding
 from ..evidence import Evidence
 from ..events import SecurityEvent
 from ..incidents import Incident
+from ..dispositions import AlertDisposition
 from ..investigations import AnalystNote, Investigation, TimelineEntry
 from ..risk import RiskAssessment
 from ..threat_context import ThreatContext
@@ -191,6 +192,79 @@ class AnalysisRepository:
         if row is None: return None
         d = json.loads(row[0])
         return Alert(d["alert_id"], d["rule_id"], d["severity"], _dt(d["timestamp"]), d["title"], d["description"], [ _event(x) for x in d["evidence"] ], d.get("source", "linux-auth"), d.get("rule_fingerprint"))
+
+    @staticmethod
+    def _disposition_from_row(row: Any) -> AlertDisposition:
+        return AlertDisposition(
+            disposition_id=row["disposition_id"], alert_id=row["alert_id"],
+            incident_id=row["incident_id"], actor_user_id=row["actor_user_id"],
+            created_at=_dt(row["created_at"]), disposition=row["disposition"],
+            reason=row["reason"], rule_id=row["rule_id"],
+            rule_fingerprint=row["rule_fingerprint"],
+            engine_configuration_fingerprint=row["engine_configuration_fingerprint"],
+            run_id=row["run_id"], idempotency_key=row["idempotency_key"],
+        )
+
+    def create_disposition(self, *, alert_id: str, actor_user_id: str,
+                           disposition: str, reason: str, rule_id: str,
+                           incident_id: Optional[str] = None,
+                           rule_fingerprint: Optional[str] = None,
+                           engine_configuration_fingerprint: Optional[str] = None,
+                           run_id: Optional[str] = None,
+                           idempotency_key: Optional[str] = None) -> AlertDisposition:
+        """Create an immutable disposition with server-generated identity/time."""
+        return self.save_disposition(AlertDisposition(
+            disposition_id=uuid.uuid4().hex,
+            alert_id=alert_id,
+            incident_id=incident_id,
+            actor_user_id=actor_user_id,
+            created_at=datetime.now(timezone.utc),
+            disposition=disposition,
+            reason=reason,
+            rule_id=rule_id,
+            rule_fingerprint=rule_fingerprint,
+            engine_configuration_fingerprint=engine_configuration_fingerprint,
+            run_id=run_id,
+            idempotency_key=idempotency_key,
+        ))
+
+    def save_disposition(self, disposition: AlertDisposition) -> AlertDisposition:
+        """Append one server-authorized disposition without changing the alert."""
+        disposition.__post_init__()
+        created_at = disposition.created_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            with self.db.transaction(immediate=True) as c:
+                c.execute(
+                    "INSERT INTO alert_dispositions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (disposition.disposition_id, disposition.alert_id, disposition.incident_id,
+                     disposition.actor_user_id, created_at, disposition.disposition,
+                     disposition.reason, disposition.rule_id, disposition.rule_fingerprint,
+                     disposition.engine_configuration_fingerprint, disposition.run_id,
+                     disposition.idempotency_key),
+                )
+        except Exception:
+            raise
+        return disposition
+
+    def get_disposition(self, disposition_id: str) -> Optional[AlertDisposition]:
+        row = self.db.connection.execute(
+            "SELECT * FROM alert_dispositions WHERE disposition_id=?", (disposition_id,)
+        ).fetchone()
+        return None if row is None else self._disposition_from_row(row)
+
+    def get_current_disposition(self, alert_id: str) -> Optional[AlertDisposition]:
+        row = self.db.connection.execute(
+            "SELECT * FROM alert_dispositions WHERE alert_id=? "
+            "ORDER BY created_at DESC, disposition_id DESC LIMIT 1", (alert_id,)
+        ).fetchone()
+        return None if row is None else self._disposition_from_row(row)
+
+    def list_disposition_history(self, alert_id: str) -> list[AlertDisposition]:
+        rows = self.db.connection.execute(
+            "SELECT * FROM alert_dispositions WHERE alert_id=? "
+            "ORDER BY created_at ASC, disposition_id ASC", (alert_id,)
+        ).fetchall()
+        return [self._disposition_from_row(row) for row in rows]
 
     def save_incident(self, incident: Incident, run_id: Optional[str] = None) -> None:
         d = incident.to_dict()
